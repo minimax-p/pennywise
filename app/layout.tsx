@@ -23,7 +23,7 @@ export default function RootLayout({children}: Readonly<{children: ReactNode }>)
     return (
         <ClerkProvider afterSignOutUrl="/sign-in">
             <html lang="en" className="dark selection:bg-amber-900 selection:text-amber-300" style={{colorScheme: "dark",}} suppressHydrationWarning>
-                <body className={`${GeistSans.variable} ${GeistMono.variable} ${inter.className} ${Futura.variable}`}>
+                <body className={`${GeistSans.variable} ${GeistMono.variable} ${inter.className}`}>
                     <Toaster richColors position="bottom-right" />
                     <RootProviders>{children}</RootProviders>
                 </body>
