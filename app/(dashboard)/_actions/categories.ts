@@ -1,28 +1,162 @@
 "use server";
 
-import {CreateCategorySchema, CreateCategorySchemaType} from "@/schema/categories";
-import {currentUser} from "@clerk/nextjs/server";
-import {redirect} from "next/navigation";
+import { CreateCategorySchema, CreateCategorySchemaType, DeleteCategorySchema, DeleteCategorySchemaType, EditCategorySchema, EditCategorySchemaType } from "@/schema/categories";
+import { currentUser } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 
-export async function CreateCategory(form: CreateCategorySchemaType){
+export async function CreateCategory(form: CreateCategorySchemaType) {
     const parsedBody = CreateCategorySchema.safeParse(form);
-    if (!parsedBody.success){
+    if (!parsedBody.success) {
         throw new Error("CreateCategorySchema: Invalid form data");
     }
 
     const user = await currentUser();
-    if(!user){
+    if (!user) {
         redirect('/sign-in');
     }
 
-    const {name, icon, type} = parsedBody.data;
+
+
+    const { name, icon, type } = parsedBody.data;
     return prisma.category.create({
         data: {
             userId: user.id,
             name,
             icon,
-            type
+            type,
+            isUniversal: false
+        }
+    });
+}
+
+export async function DeleteCategory(form: DeleteCategorySchemaType) {
+    const parsedBody = DeleteCategorySchema.safeParse(form);
+    if (!parsedBody.success) {
+        throw new Error("DeleteCategorySchema: Invalid form data");
+    }
+
+    const user = await currentUser();
+    if (!user) {
+        redirect('/sign-in');
+    }
+
+    const categoryToDelete = await prisma.category.findFirst({
+        where: {
+            userId: user.id,
+            name: parsedBody.data.name,
+            type: parsedBody.data.type,
+            isUniversal: false
+        }
+    });
+
+    if (!categoryToDelete) {
+        throw new Error("Category not found or cannot be deleted");
+    }
+
+    const unsortedCategory = await GetOrCreateUnsortedCategory(parsedBody.data.type);
+
+    // Update all transactions to use the Unsorted category
+    await prisma.transaction.updateMany({
+        where: {
+            userId: user.id,
+            categoryId: categoryToDelete.id
+        },
+        data: {
+            categoryId: unsortedCategory.id
+        }
+    });
+
+    // Delete the category
+    return prisma.category.delete({
+        where: {
+            id: categoryToDelete.id
+        }
+    });
+}
+
+export async function EditCategory(form: EditCategorySchemaType) {
+    const parsedBody = EditCategorySchema.safeParse(form);
+    if (!parsedBody.success) {
+        throw new Error("EditCategorySchema: Invalid form data");
+    }
+
+    const user = await currentUser();
+    if (!user) {
+        redirect('/sign-in');
+    }
+
+    const { oldName, newName, icon, type } = parsedBody.data;
+
+    const categoryToEdit = await prisma.category.findFirst({
+        where: {
+            userId: user.id,
+            name: oldName,
+            type: type,
+            isUniversal: false
+        }
+    });
+
+    if (!categoryToEdit) {
+        throw new Error("Category not found or cannot be edited");
+    }
+
+    // Update the category
+    return prisma.category.update({
+        where: {
+            id: categoryToEdit.id
+        },
+        data: {
+            name: newName,
+            icon: icon
+        }
+    });
+}
+
+export async function GetOrCreateUnsortedCategory(type: string) {
+    const user = await currentUser();
+    if (!user) {
+        redirect('/sign-in');
+    }
+
+    let unsortedCategory = await prisma.category.findFirst({
+        where: {
+            name: "Unsorted",
+            type: type,
+            isUniversal: true
+        }
+    });
+
+    if (!unsortedCategory) {
+        unsortedCategory = await prisma.category.create({
+            data: {
+                name: "Unsorted",
+                icon: "❓",
+                type: type,
+                isUniversal: true
+            }
+        });
+    }
+
+    return unsortedCategory;
+}
+
+export async function GetCategories(type: string) {
+    const user = await currentUser();
+    if (!user) {
+        redirect('/sign-in');
+    }
+
+    return prisma.category.findMany({
+        where: {
+            OR: [
+                { userId: user.id },
+                { isUniversal: true }
+            ],
+            type: type
+        },
+        orderBy: {
+            name: 'asc'
         }
     });
 }

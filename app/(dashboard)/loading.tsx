@@ -1,8 +1,9 @@
 import React from 'react';
+import {Skeleton} from "@/components/ui/skeleton";
 
 function Loading() {
     return (
-        <div>future skeleton goes here</div>
+        <Skeleton></Skeleton>
     );
 }
 

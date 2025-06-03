@@ -37,20 +37,20 @@ function CategoryPicker({type, onChange}: Props) {
     }, [setValue, setOpen]);
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={open} onOpenChange={setOpen} modal={true}>
             <PopoverTrigger asChild>
-                <Button variant={"outline"} role={"combobox"} aria-expanded={open} className="w-[200px] justify-between">
+                <Button variant={"outline"} role={"combobox"} aria-expanded={open} className="w-full justify-between">
                     {selectedCategory? (<CategoryRow category={selectedCategory}/>) : "Select Category" }
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50"/>
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[200px] p-0">
-                <Command onSubmit={e=>{
-                    e.preventDefault()
-                }}>
+            <PopoverContent className="w-[300px] p-0 h-[350px]">
+                <Command className="rounded-lg border shadow-md h-full"
+                         onSubmit={e=>{
+                             e.preventDefault()}}
+                >
                     <CommandInput placeholder="Search category..."></CommandInput>
-                    <CreateCategoryDialog type={type} successCallBack={successCallBack}
-                    />
+                    <CreateCategoryDialog type={type} successCallBack={successCallBack} />
                     <CommandEmpty>
                         <p>Category not found</p>
                         <p className="text-xs text-muted-foreground">

@@ -23,7 +23,6 @@ function CategoriesStats({userSettings, from, to}: Props) {
         queryKey: ['overview', 'stats','categories', from, to],
         queryFn: () => fetch(`/api/stats/categories?from=${DateToUTCDate(from)}&to=${DateToUTCDate(to)}`).then((res) => res.json())
     })
-
     const formatter = useMemo(()=>{
         return GetFormatterForCurrency(userSettings.currency)
     }, [userSettings.currency])
@@ -45,6 +44,7 @@ export default CategoriesStats;
 function CategoriesCard({type, formatter, data}:{type: TransactionType, formatter: Intl.NumberFormat, data: GetCategoriesStatsResponseType}) {
 
     const filteredData = data.filter(el => el.type === type)
+    // console.log(filteredData)
     const total = filteredData.reduce((acc, el)=> acc+(el._sum?.amount || 0), 0)
 
     return (
@@ -65,28 +65,36 @@ function CategoriesCard({type, formatter, data}:{type: TransactionType, formatte
                 )}
                 {filteredData.length > 0 && (
                     <ScrollArea className="h-60 w-full px-4">
-                    <div className="flex w-full flex-col gap-4 p-4">
+                        <div className="flex w-full flex-col gap-4 p-4">
                             {
                                 filteredData.map(item=>{
                                     const amount = item._sum.amount || 0;
                                     const percentage = (amount*100) / (total || amount)
 
                                     return (
-                                        <div key={item.category} className="flex flex-col gap-2">
+                                        <div key={item.categoryId} className="flex flex-col gap-2 font-mono">
                                             <div className="flex items-center justify-between">
-                                                <span className="flex items-center text-gray-400">
-                                                    {item.categoryIcon} {item.category}
-                                                    <span className="ml-2 text-xs text-muted-foreground">
+                                                <span className="flex items-center">
+                                                    {item.category.icon} {item.category.name}
+                                                    <span className="ml-2 text-xs">
                                                         ({percentage.toFixed(2)}%)
                                                     </span>
                                                 </span>
-                                                <span className="text-sm text-gray-400">
+                                                <span className="txt-sm">
                                                     {formatter.format(amount)}
                                                 </span>
                                             </div>
-                                            <Progress value={percentage}
-                                                      indicator={type==="income" ? "bg-lime-500" : "bg-amber-500"}
-                                            />
+                                            {
+                                                type === 'income' && (
+                                                    <Progress value={percentage} color={'bg-sky-500'} max={100}/>
+                                                )
+                                            }
+                                            {
+                                                type === 'expense' && (
+                                                    <Progress value={percentage} color={'bg-amber-500'} max={100}/>
+                                                )
+                                            }
+
                                         </div>
                                     )
                                 })

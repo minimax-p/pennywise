@@ -1,12 +1,11 @@
 "use client";
 
-import React, {useCallback, useState} from 'react';
-import {TransactionType} from "@/lib/types";
-import {useForm} from "react-hook-form";
-import {CreateCategorySchema, CreateCategorySchemaType} from "@/schema/categories";
-import {zodResolver} from "@hookform/resolvers/zod";
+import React, {ReactNode, useCallback, useState} from 'react';
+import { useForm } from "react-hook-form";
+import { CreateCategorySchema, CreateCategorySchemaType } from "@/schema/categories";
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
-    Dialog, DialogClose,
+    Dialog,
     DialogContent,
     DialogDescription,
     DialogFooter,
@@ -14,34 +13,28 @@ import {
     DialogTitle,
     DialogTrigger
 } from "@/components/ui/dialog";
-import {Button} from "@/components/ui/button";
-import {
-    Circle,
-    CircleOff,
-    CircleOffIcon,
-    Loader, Loader2,
-    MousePointerClick,
-    PlusSquare,
-    SquareDashedMousePointer
-} from "lucide-react";
-import {cn} from "@/lib/utils";
-import {Form, FormControl, FormDescription, FormField, FormItem, FormLabel} from "@/components/ui/form";
-import {Input} from "@/components/ui/input";
-import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover';
+import { Button } from "@/components/ui/button";
+import {Loader2, MousePointerClick, MousePointerClickIcon} from "lucide-react";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import data from '@emoji-mart/data'
 import Picker from '@emoji-mart/react'
-import {useMutation, useQueryClient} from "@tanstack/react-query";
-import {CreateCategory} from "@/app/(dashboard)/_actions/categories";
-import {Category} from "@prisma/client";
-import {toast} from "sonner";
-import {useTheme} from "next-themes";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { CreateCategory } from "@/app/(dashboard)/_actions/categories";
+import { Category } from "@prisma/client";
+import { toast } from "sonner";
+import { useTheme } from "next-themes";
+import {cn} from "@/lib/utils";
+import {TransactionType} from "@/lib/types";
 
 interface Props {
     type: TransactionType;
     successCallBack: (category: Category) => void;
+    trigger?: ReactNode;
 }
 
-function CreateCategoryDialog({type, successCallBack}: Props) {
+function CreateCategoryDialog({type, successCallBack, trigger}: Props) {
     const [open, setOpen] = useState(false);
     const form = useForm<CreateCategorySchemaType>({
         resolver: zodResolver(CreateCategorySchema),
@@ -53,7 +46,7 @@ function CreateCategoryDialog({type, successCallBack}: Props) {
 
     const {mutate, isPending} = useMutation({
         mutationFn: CreateCategory,
-        onSuccess: async (data: Category)=>{
+        onSuccess: async (data: Category) => {
             form.reset({
                 name: "",
                 icon: "",
@@ -70,15 +63,14 @@ function CreateCategoryDialog({type, successCallBack}: Props) {
                 queryKey: ['categories']
             });
 
-            setOpen(prev => !prev);
-
+            setOpen(false);
         },
-        onError: ()=> {
+        onError: () => {
             toast.error("Failed to create category", {
                 id: 'create-category'
             });
         }
-    })
+    });
 
     const onSubmit = useCallback((values: CreateCategorySchemaType)=>{
         toast.loading("Creating category...", {
@@ -90,56 +82,49 @@ function CreateCategoryDialog({type, successCallBack}: Props) {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant={"ghost"}
-                        className="w-full flex border-separate items-center justify-start rounded-none border-b px-3 py-3 text-muted-foreground">
-                    <PlusSquare className="mr-2 h-4 w-4"/>
-                    Create new
-                </Button>
+                {trigger}
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>
-                        Create <span
-                        className={cn("m-1", type === 'income' ? "text-lime-500" : "text-amber-500")}>{type}</span>
-                        category
-                        <DialogDescription>Categories are used to group your transaction </DialogDescription>
+                        Create <span className={cn("m-1", type === 'income' ? "text-sky-500" : "text-amber-500")}>{type}</span> category
                     </DialogTitle>
+                    <DialogDescription>Categories are used to group your transactions</DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                         <FormField
                             control={form.control}
                             name="name"
-                            render={({field}) => (
+                            render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Name</FormLabel>
                                     <FormControl>
                                         <Input placeholder="Category" {...field}></Input>
                                     </FormControl>
-                                    <FormDescription>Name your category! </FormDescription>
+                                    <FormDescription>Name your category!</FormDescription>
                                 </FormItem>
                             )}
                         />
                         <FormField
                             control={form.control}
                             name="icon"
-                            render={({field}) => (
+                            render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Emoji</FormLabel>
                                     <FormControl>
                                         <Popover>
                                             <PopoverTrigger asChild>
                                                 <Button variant="outline" className="h-[100px] w-full">
-                                                    {form.watch('icon') ? (
+                                                    {field.value ? (
                                                         <div className="flex flex-col items-center gap-2">
                                                             <span className='text-5xl' role='img'>{field.value}</span>
-                                                            <p className="text-xs text-muted-foreground">Click to </p>
+                                                            <p className="text-xs text-muted-foreground">Click to change</p>
                                                         </div>
                                                     ) : (
                                                         <div className="flex flex-col items-center gap-2">
-                                                            <MousePointerClick className="h-[48px] w-[48px]"/>
-                                                            <p className="text-xs text-muted-foreground">Click to
-                                                                select</p>
+                                                            <MousePointerClickIcon className="h-[48px] w-[48px]"/>
+                                                            <p className="text-xs text-muted-foreground">Click to select</p>
                                                         </div>
                                                     )}
                                                 </Button>
@@ -161,12 +146,7 @@ function CreateCategoryDialog({type, successCallBack}: Props) {
                     </form>
                 </Form>
                 <DialogFooter>
-                    <DialogClose asChild>
-                        <Button type='button' variant={'secondary'} onClick={() => {
-                            form.reset();
-                        }}>Cancel
-                        </Button>
-                    </DialogClose>
+                    <Button variant={'secondary'} onClick={() => setOpen(false)}>Cancel</Button>
                     <Button onClick={form.handleSubmit(onSubmit)} disabled={isPending}>
                         {!isPending && "Create"}
                         {isPending && <Loader2 className="animate-spin h-5 w-5"/>}

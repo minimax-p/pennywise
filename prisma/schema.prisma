@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -19,28 +13,32 @@ model UserSettings {
 }
 
 model Category {
-  createdAt DateTime @default(now())
-  name      String
-  userId    String
-  icon      String
-  type      String   @default("income")
+  createdAt   DateTime      @default(now())
+  name        String
+  userId      String?
+  icon        String
+  type        String        @default("income")
+  id          String        @id @default(uuid())
+  isUniversal Boolean       @default(false)
+  tag         String?
+  Transaction Transaction[]
 
   @@unique([name, userId, type])
 }
 
 model Transaction {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updateAt  DateTime @default(now())
-
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
   amount      Float
   description String
   date        DateTime
-  userId      String
   type        String   @default("income")
+  userId      String
+  categoryId  String
+  updatedAt   DateTime @updatedAt
+  category    Category @relation(fields: [categoryId], references: [id])
 
-  category     String
-  categoryIcon String
+  @@index([categoryId], map: "Transaction_categoryId_fkey")
 }
 
 model MonthHistory {

@@ -38,7 +38,7 @@ function StatsCards({from, to, userSettings}: Props) {
                     value={income}
                     title="Income"
                     icon={
-                        <TrendingUp className="h-12 w-12 items-center rounded-lg p-2 text-lime-500 bg-lime-400/10" />
+                        <TrendingUp className="h-12 w-12 items-center rounded-lg p-2 text-sky-500 bg-sky-400/10" />
                     }
                 />
             </SkeletonWrapper>
@@ -60,7 +60,7 @@ function StatsCards({from, to, userSettings}: Props) {
                     value={balance}
                     title="Balance"
                     icon={
-                        <Wallet className="h-12 w-12 items-center rounded-lg p-2 text-yellow-500 bg-yellow-400/10" />
+                        <Wallet className="h-12 w-12 items-center rounded-lg p-2 text-stone-500 bg-stone-400/10" />
                     }
                 />
             </SkeletonWrapper>
@@ -93,7 +93,7 @@ function StatCard(
                     end={value}
                     decimals={2}
                     formattingFn={formatFn}
-                    className="text-2xl"
+                    className="text-2xl font-mono"
                     duration={0.8}
                 />
             </div>

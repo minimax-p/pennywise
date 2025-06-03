@@ -1,12 +1,9 @@
 import type {Metadata} from "next";
-import localFont from "next/font/local";
+import { GeistSans } from 'geist/font/sans';
+import { GeistMono } from 'geist/font/mono';
 import "./globals.css";
 import {
     ClerkProvider,
-    SignInButton,
-    SignedIn,
-    SignedOut,
-    UserButton
 } from '@clerk/nextjs'
 import './globals.css'
 import RootProviders from "@/components/providers/RootProviders";
@@ -25,8 +22,8 @@ export const metadata: Metadata = {
 export default function RootLayout({children}: Readonly<{children: ReactNode }>) {
     return (
         <ClerkProvider afterSignOutUrl="/sign-in">
-            <html lang="en" className="dark" style={{colorScheme: "dark",}} suppressHydrationWarning>
-                <body className={inter.className}>
+            <html lang="en" className="dark selection:bg-amber-900 selection:text-amber-300" style={{colorScheme: "dark",}} suppressHydrationWarning>
+                <body className={`${GeistSans.variable} ${GeistMono.variable} ${inter.className} ${Futura.variable}`}>
                     <Toaster richColors position="bottom-right" />
                     <RootProviders>{children}</RootProviders>
                 </body>

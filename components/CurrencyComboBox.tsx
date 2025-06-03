@@ -86,7 +86,7 @@ export function CurrencyComboBox() {
             <SkeletonWrapper isLoading={userSettings.isFetching}>
                 <Popover open={open} onOpenChange={setOpen}>
                     <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-start" disabled={mutation.isPending}>
+                        <Button variant="outline" className="w-full justify-start font-mono" disabled={mutation.isPending}>
                             {selectedOption ? <>{selectedOption.emoji} {selectedOption.value}</> : <>Set currency</>}
                         </Button>
                     </PopoverTrigger>
@@ -102,8 +102,8 @@ export function CurrencyComboBox() {
         <SkeletonWrapper isLoading={userSettings.isFetching}>
             <Drawer open={open} onOpenChange={setOpen}>
                 <DrawerTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start" disabled={mutation.isPending}>
-                        {selectedOption ? <>{selectedOption.label}</> : <>Set currency</>}
+                    <Button variant="outline" className="w-full justify-start font-mono" disabled={mutation.isPending}>
+                        {selectedOption ? <>{selectedOption.emoji} {selectedOption.value}</> : <>Set currency</>}
                     </Button>
                 </DrawerTrigger>
                 <DrawerContent>
@@ -128,7 +128,7 @@ function OptionList({
             <CommandInput placeholder="Filter currency..." />
             <CommandList>
                 <CommandEmpty>No results found.</CommandEmpty>
-                <CommandGroup>
+                <CommandGroup >
                     {Currencies.map((currency) => (
                         <CommandItem
                             key={currency.value}

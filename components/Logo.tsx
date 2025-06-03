@@ -2,7 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
-import pennywiseLogo from "./logo/metallic-logo.png";
+import pennywiseLogo from "./logo/Frame.png";
 // import pennywiseLogo from "./logo/all-gold.png";
 function Logo() {
     return (
@@ -14,7 +14,7 @@ function Logo() {
                 width={80} // Set width for image optimization
                 height={80} // Set height for image optimization
             />
-            <p className="text-3xl font-bold leading-tight tracking-tighter text-primary">
+            <p className="text-3xl font-mono font-bold leading-tight tracking-tighter text-primary">
                 Pennywise
             </p>
         </a>
@@ -24,7 +24,7 @@ function Logo() {
 export function LogoMobile() {
     return (
         <a href="/" className="flex items-center gap-2">
-            <p className="text-3xl font-bold leading-tight tracking-tighter text-primary">
+            <p className="text-3xl font-mono font-bold leading-tight tracking-tighter text-primary">
                 Pennywise
             </p>
         </a>

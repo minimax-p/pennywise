@@ -17,28 +17,31 @@ export async function CreateTransaction(form: CreateTransactionSchemaType) {
     }
 
     const {amount, category, date, description, type} = parsedBody.data;
+
     const categoryRow = await prisma.category.findFirst({
         where: {
-            userId: user.id,
             name: category,
+            OR: [
+                { userId: user.id }, // Matches the user ID if it exists
+                { userId: null }      // Matches universal categories
+            ]
         }
-    })
-
+    });
+    // console.log(categoryRow)
     if (!categoryRow) {
         throw new Error("Category not found");
     }
 
     await prisma.$transaction([
         prisma.transaction.create({
-            data: {
+            data:{
                 userId: user.id,
                 amount,
                 description: description || "",
                 date,
                 type,
-                category: categoryRow.name,
-                categoryIcon: categoryRow.icon,
-            } as Prisma.TransactionCreateInput,
+                categoryId: categoryRow.id,
+            }
         }),
         prisma.monthHistory.upsert({
             where : {
@@ -91,7 +94,5 @@ export async function CreateTransaction(form: CreateTransactionSchemaType) {
             }
         })
     ])
-
-
 
 }
