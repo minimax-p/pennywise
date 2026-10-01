@@ -21,8 +21,8 @@ function Overview({userSettings}:{userSettings: UserSettings}) {
                 <h2 className="text-3xl font-bold">Overview</h2>
                 <div className="flex items-center gap-3 font-mono">
                     <DateRangePicker
-                        initialDateTo={dateRange.from}
-                        initialDateFrom={dateRange.to}
+                        initialDateFrom={dateRange.from}
+                        initialDateTo={dateRange.to}
                         showCompare={false}
                         onUpdate={(values)=>{
                             const {from, to} = values.range;

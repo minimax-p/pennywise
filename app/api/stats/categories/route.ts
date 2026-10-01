@@ -1,7 +1,6 @@
 import {currentUser} from "@clerk/nextjs/server";
 import {redirect} from "next/navigation";
 import {OverviewQuerySchema} from "@/schema/overview";
-import {getEnabledCategories} from "node:trace_events";
 import prisma from "@/lib/prisma";
 
 export async function GET(request: Request) {
@@ -16,7 +15,9 @@ export async function GET(request: Request) {
 
     const queryParams = OverviewQuerySchema.safeParse({from, to});
     if(!queryParams.success){
-        throw new Error(queryParams.error.message);
+        return Response.json(queryParams.error.message, {
+            status: 400,
+        });
     }
 
     const stats = await getCategoriesStats(
@@ -70,6 +71,5 @@ async function getCategoriesStats(userId: string, from: Date, to: Date) {
         ...stat,
         category: categoryMap.get(stat.categoryId) || { name: 'Unknown', icon: 'question-mark' }
     }));
-    console.log('enhancedStats', enhancedStats);
     return enhancedStats;
 }
