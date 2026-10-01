@@ -38,7 +38,33 @@ model Transaction {
   updatedAt   DateTime @updatedAt
   category    Category @relation(fields: [categoryId], references: [id])
 
+  // Set when the transaction was imported from a linked bank account
+  plaidTransactionId String?    @unique
+  plaidItemId        String?
+  plaidItem          PlaidItem? @relation(fields: [plaidItemId], references: [id], onDelete: SetNull)
+
   @@index([categoryId], map: "Transaction_categoryId_fkey")
+  @@index([userId, date])
+}
+
+model PlaidItem {
+  id              String        @id @default(uuid())
+  userId          String
+  itemId          String        @unique
+  // Encrypted with PLAID_TOKEN_ENCRYPTION_KEY, see lib/crypto.ts
+  accessToken     String        @db.Text
+  institutionId   String?
+  institutionName String?
+  // Position in the /transactions/sync stream
+  cursor          String?       @db.Text
+  // Plaid error code from the last failed sync, e.g. ITEM_LOGIN_REQUIRED
+  error           String?
+  lastSyncedAt    DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  transactions    Transaction[]
+
+  @@index([userId])
 }
 
 model MonthHistory {
