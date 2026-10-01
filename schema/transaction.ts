@@ -12,3 +12,19 @@ export const CreateTransactionSchema = z.object({
 })
 
 export type CreateTransactionSchemaType = z.infer<typeof CreateTransactionSchema>;
+
+export const EditTransactionSchema = z.object({
+    id: z.string().min(1),
+    amount: z.coerce.number().positive().multipleOf(0.01),
+    description: z.string().optional(),
+    date: z.coerce.date(),
+    category: z.string(),
+})
+
+export type EditTransactionSchemaType = z.infer<typeof EditTransactionSchema>;
+
+export const DeleteTransactionSchema = z.object({
+    id: z.string().min(1),
+})
+
+export type DeleteTransactionSchemaType = z.infer<typeof DeleteTransactionSchema>;
