@@ -19,6 +19,7 @@ export async function CreateCategory(form: CreateCategorySchemaType) {
 
 
     const { name, icon, type } = parsedBody.data;
+    await assertCategoryNameAvailable(user.id, name, type);
     return prisma.category.create({
         data: {
             userId: user.id,
@@ -101,6 +102,8 @@ export async function EditCategory(form: EditCategorySchemaType) {
         throw new Error("Category not found or cannot be edited");
     }
 
+    await assertCategoryNameAvailable(user.id, newName, type, categoryToEdit.id);
+
     // Update the category
     return prisma.category.update({
         where: {
@@ -113,12 +116,26 @@ export async function EditCategory(form: EditCategorySchemaType) {
     });
 }
 
-export async function GetOrCreateUnsortedCategory(type: string) {
-    const user = await currentUser();
-    if (!user) {
-        redirect('/sign-in');
+// Universal categories have no userId, so the database unique constraint does not cover
+// them. Checking here keeps category names unambiguous for each user.
+async function assertCategoryNameAvailable(userId: string, name: string, type: string, excludeId?: string) {
+    const existing = await prisma.category.findFirst({
+        where: {
+            name,
+            type,
+            OR: [
+                { userId },
+                { isUniversal: true }
+            ],
+            ...(excludeId && { NOT: { id: excludeId } })
+        }
+    });
+    if (existing) {
+        throw new Error(`A ${type} category named "${name}" already exists`);
     }
+}
 
+async function GetOrCreateUnsortedCategory(type: string) {
     let unsortedCategory = await prisma.category.findFirst({
         where: {
             name: "Unsorted",

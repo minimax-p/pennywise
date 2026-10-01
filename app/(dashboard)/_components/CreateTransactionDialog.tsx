@@ -67,8 +67,14 @@ function CreateTransactionDialog({trigger, type}: Props) {
             queryClient.invalidateQueries({
                 queryKey: ['overview']
             });
+            queryClient.invalidateQueries({
+                queryKey: ['transactions']
+            });
 
             setOpen((prev)=>!prev);
+        },
+        onError: ()=>{
+            toast.error("Failed to create transaction", {id: 'create-transaction'});
         }
     })
 

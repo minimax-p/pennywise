@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { Category } from "@prisma/client";
 import DeleteCategoryDialog from "@/app/(dashboard)/_components/DeleteCategoryDialog";
 import EditCategoryDialog from "@/app/(dashboard)/_components/EditCategoryDialog";
+import LinkedAccounts from "@/app/(dashboard)/_components/LinkedAccounts";
 
 
 function Page() {
@@ -28,13 +29,13 @@ function Page() {
                 </div>
             </div>
             <div className='container flex flex-col gap-4 p-4'>
-                {/*TODO: Link account to Plaid!!!!!*/}
                 <Card>
                     <CardHeader>
                         <CardTitle>Link Your Bank Accounts</CardTitle>
                         <CardDescription>Connect your accounts securely with Plaid</CardDescription>
                     </CardHeader>
                     <CardContent>
+                        <LinkedAccounts />
                     </CardContent>
                 </Card>
                 <Card>
