@@ -15,7 +15,14 @@ export type StatementRow = {
     bankCategory: string | null;
     // Set when the row should not be imported by default, with the reason
     skipReason: string | null;
+    // The account's balance right after this line, when the file has a balance column
+    balance?: number | null;
+    // Extra text from the bank, like an OFX memo, kept as the transaction's note
+    memo?: string | null;
 };
+
+// A balance the statement shows for the end of a day
+export type StatementBalance = { date: Date, balance: number };
 
 export type ColumnMapping = {
     date: string;
@@ -29,6 +36,8 @@ export type ColumnMapping = {
     direction?: string;
     category?: string;
     id?: string;
+    // Running balance after each line
+    balance?: string;
     // Amounts are positive for money out, as some credit cards export them
     invertSign?: boolean;
     // Bank-specific handling, see PRESETS
@@ -36,7 +45,7 @@ export type ColumnMapping = {
 };
 
 export type ParsedFile =
-    | { format: "ofx", rows: StatementRow[], skipped: number }
+    | { format: "ofx", rows: StatementRow[], skipped: number, balance: StatementBalance | null }
     | { format: "csv", headers: string[], records: string[][] };
 
 export type PresetName = "chase-checking" | "chase-card" | "discover" | "capital-one-bank" | "capital-one-card" | "venmo";
@@ -45,7 +54,7 @@ const PRESETS: { name: PresetName, label: string, headers: string[], mapping: Om
     {
         name: "chase-checking", label: "Chase checking or savings",
         headers: ["Details", "Posting Date", "Description", "Amount"],
-        mapping: {date: "Posting Date", description: "Description", amount: "Amount"},
+        mapping: {date: "Posting Date", description: "Description", amount: "Amount", balance: "Balance"},
     },
     {
         name: "chase-card", label: "Chase credit card",
@@ -144,7 +153,12 @@ export function isOfx(content: string) {
     return /<OFX>/i.test(content);
 }
 
-export function parseOfx(content: string): { rows: StatementRow[], skipped: number } {
+// End of a statement day, when a balance shown for that day was true
+export function endOfDay(day: Date): Date {
+    return new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), 23, 59, 59, 999));
+}
+
+export function parseOfx(content: string): { rows: StatementRow[], skipped: number, balance: StatementBalance | null } {
     const rows: StatementRow[] = [];
     let skipped = 0;
     const blocks = content.match(/<STMTTRN>[\s\S]*?(?=<\/STMTTRN>|<STMTTRN>|<\/BANKTRANLIST>)/gi) ?? [];
@@ -157,16 +171,23 @@ export function parseOfx(content: string): { rows: StatementRow[], skipped: numb
         }
         const name = ofxField(block, "NAME") ?? "";
         const memo = ofxField(block, "MEMO") ?? "";
+        // NAME is cut off at 32 characters, and banks often repeat it in full as the memo
+        const fullName = name && memo.toUpperCase().startsWith(name.toUpperCase()) ? memo : name;
         rows.push({
             date,
             amount,
-            description: (name || memo).slice(0, 191),
+            description: (fullName || memo).slice(0, 191),
             externalId: ofxField(block, "FITID"),
             bankCategory: null,
             skipReason: null,
+            memo: name && memo && fullName === name && memo.toUpperCase() !== name.toUpperCase() ? memo.slice(0, 500) : null,
         });
     }
-    return {rows, skipped};
+    const ledger = content.match(/<LEDGERBAL>[\s\S]*?(?=<\/LEDGERBAL>|<AVAILBAL>|<\/STMTRS>|<\/CCSTMTRS>|$)/i)?.[0];
+    const balanceAmount = ledger ? parseAmount(ofxField(ledger, "BALAMT")) : null;
+    const balanceDay = ledger ? parseDate(ofxField(ledger, "DTASOF")) : null;
+    const balance = balanceAmount !== null && balanceDay ? {date: endOfDay(balanceDay), balance: balanceAmount} : null;
+    return {rows, skipped, balance};
 }
 
 // ---------- CSV ----------
@@ -232,7 +253,14 @@ export function guessMapping(headers: string[], records: string[][], accountType
         mapping.invertSign = positive > amounts.length / 2;
     }
 
-    return mapping;
+    return withBalanceColumn(mapping, headers);
+}
+
+// Mappings saved before balances were read, or picked by hand, still get the balance column
+export function withBalanceColumn(mapping: ColumnMapping, headers: string[]): ColumnMapping {
+    if (mapping.balance && headers.includes(mapping.balance)) return mapping;
+    const balance = findHeader(headers, [/^balance$/i, /^running bal/i]);
+    return balance ? {...mapping, balance} : mapping;
 }
 
 function cell(headers: string[], record: string[], column: string | undefined) {
@@ -287,6 +315,8 @@ export function applyMapping(headers: string[], records: string[][], mapping: Co
             }
         }
 
+        // Card files with flipped signs show balances owed as positive numbers too
+        const balance = mapping.balance && !mapping.invertSign ? parseAmount(get(mapping.balance)) : null;
         rows.push({
             date,
             amount,
@@ -294,6 +324,7 @@ export function applyMapping(headers: string[], records: string[][], mapping: Co
             externalId: get(mapping.id) || null,
             bankCategory: get(mapping.category) || null,
             skipReason,
+            balance,
         });
     }
 
@@ -317,4 +348,31 @@ export function fingerprintRows(rows: StatementRow[]): string[] {
         seen.set(base, occurrence);
         return `h:${createHash("sha256").update(base).digest("hex").slice(0, 32)}:${occurrence}`;
     });
+}
+
+// ---------- Balances ----------
+
+// End-of-day balances from a file with a running balance column, plus the balance before
+// its first line. Statements list lines newest first or oldest first; the order whose
+// balances add up line by line is used, and none are returned if neither does.
+export function statementBalances(rows: StatementRow[]): StatementBalance[] {
+    if (rows.length === 0 || rows.some((r) => r.balance == null)) return [];
+    const addsUp = (ordered: StatementRow[]) => ordered.every((row, i) =>
+        i === 0 || Math.abs(ordered[i - 1].balance! + row.amount - row.balance!) < 0.005);
+    const reversed = [...rows].reverse();
+    const chronological = rows[0].date >= rows[rows.length - 1].date && addsUp(reversed) ? reversed
+        : addsUp(rows) ? rows : null;
+    if (!chronological) return [];
+
+    const first = chronological[0];
+    const dayBefore = new Date(first.date.getTime() - 24 * 60 * 60 * 1000);
+    const byDay = new Map<number, StatementBalance>();
+    byDay.set(dayBefore.getTime(), {
+        date: endOfDay(dayBefore),
+        balance: Math.round((first.balance! - first.amount) * 100) / 100 + 0,
+    });
+    for (const row of chronological) {
+        byDay.set(row.date.getTime(), {date: endOfDay(row.date), balance: row.balance!});
+    }
+    return [...byDay.values()].sort((a, b) => a.date.getTime() - b.date.getTime());
 }

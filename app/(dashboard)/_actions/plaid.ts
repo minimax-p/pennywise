@@ -7,7 +7,6 @@ import prisma from "@/lib/prisma";
 import {getPlaidError, plaidClient, plaidCountryCodes} from "@/lib/plaid";
 import {decryptSecret, encryptSecret} from "@/lib/crypto";
 import {PlaidSyncResult, syncPlaidItem} from "@/lib/plaidSync";
-import {applyHistoryChanges} from "@/lib/history";
 import {UnlinkPlaidItemSchema, UnlinkPlaidItemSchemaType} from "@/schema/plaid";
 
 // Expected failures are returned instead of thrown, because Next.js hides
@@ -185,7 +184,6 @@ export async function UnlinkPlaidItem(form: UnlinkPlaidItemSchemaType): Promise<
         if (deleteTransactions) {
             const imported = await tx.transaction.findMany({where: {plaidItemId: item.id, userId: user.id}});
             await tx.transaction.deleteMany({where: {id: {in: imported.map((t) => t.id)}}});
-            await applyHistoryChanges(tx, user.id, imported.map((t) => ({date: t.date, type: t.type, amount: -t.amount})));
             deleted = imported.length;
         }
         // Kept transactions stay as regular transactions (plaidItemId is set to null)

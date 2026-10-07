@@ -1,45 +1,34 @@
 'use client';
 
 import React, {ReactNode, useState} from 'react';
-import {useMutation, useQueryClient} from "@tanstack/react-query";
+import Link from "next/link";
+import {useMutation} from "@tanstack/react-query";
 import {toast} from "sonner";
-import {Loader2, Pencil, Plus, Scale, Trash2, Wallet} from "lucide-react";
+import {ChevronRight, Loader2, Pencil, Plus, Trash2} from "lucide-react";
 import SkeletonWrapper from "@/components/SkeletonWrapper";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
 import {Badge} from "@/components/ui/badge";
 import {Switch} from "@/components/ui/switch";
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select";
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger} from "@/components/ui/dialog";
-import {
-    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
-    AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
-} from "@/components/ui/alert-dialog";
-import {CreateAccount, DeleteAccount, EditAccount, SetAccountBalance} from "@/app/(dashboard)/_actions/accounts";
-import {ACCOUNT_TYPE_ICONS, ACCOUNT_TYPE_LABELS, AccountRow, useAccounts} from "@/app/(dashboard)/_components/AccountPicker";
+import {CreateAccount, DeleteAccount, EditAccount} from "@/app/(dashboard)/_actions/accounts";
+import {ACCOUNT_TYPE_LABELS, accountIcon, AccountRow, useAccounts} from "@/app/(dashboard)/_components/AccountPicker";
+import {useInvalidateMoney} from "@/lib/client/useInvalidateMoney";
 import {ACCOUNT_TYPES, AccountType} from "@/lib/types";
 import {BalanceDateFromDay, GetFormatterForCurrency, ToDayString} from "@/lib/helpers";
+import {formatBalance} from "@/lib/money";
+import {cn} from "@/lib/utils";
 
 const INSTITUTIONS = ["Chase", "Discover", "Capital One", "Venmo", "Apple", "American Express", "Bank of America", "Wells Fargo"];
 
-function useInvalidateAccounts() {
-    const queryClient = useQueryClient();
-    return () => Promise.all([
-        queryClient.invalidateQueries({queryKey: ['accounts']}),
-        queryClient.invalidateQueries({queryKey: ['transactions']}),
-    ]);
-}
-
-// Credit card balances are stored negative (money owed) but entered and shown as an amount owed
-export function formatBalance(account: { type: string, balance: number }, formatter: Intl.NumberFormat) {
-    // Avoid "-$0.00"
-    const balance = account.balance === 0 ? 0 : account.balance;
-    if (account.type === 'credit') {
-        return balance <= 0 ? `${formatter.format(balance === 0 ? 0 : -balance)} owed` : `${formatter.format(balance)} credit`;
-    }
-    return formatter.format(balance);
-}
+const TYPE_HINTS: Record<AccountType, string> = {
+    checking: "Debit card, paychecks",
+    savings: "High-yield, emergency fund",
+    cd: "Locked until it matures",
+    credit: "Shows what you owe",
+    cash: "Wallet cash, Venmo balance",
+};
 
 function AccountsManager({currency}: { currency: string }) {
     const accountsQuery = useAccounts();
@@ -48,20 +37,18 @@ function AccountsManager({currency}: { currency: string }) {
 
     return (
         <SkeletonWrapper isLoading={accountsQuery.isLoading}>
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
                 {accounts.length === 0 && (
                     <p className="text-sm text-muted-foreground">
-                        Add each bank account and card you use, for example Chase checking, Discover card and
-                        Capital One savings. Transactions and transfers are then tracked per account.
+                        Add each bank account, card, CD and cash you use, for example Chase checking, Discover card and
+                        Capital One savings.
                     </p>
                 )}
                 {accounts.map((account) => (
                     <AccountRowView key={account.id} account={account} formatter={formatter}/>
                 ))}
-                <div>
-                    <AccountFormDialog trigger={
-                        <Button className="gap-2 font-mono"><Plus className="h-4 w-4"/>Add account</Button>
-                    }/>
+                <div className="pt-2">
+                    <AccountFormDialog trigger={<Button><Plus/>Add account</Button>}/>
                 </div>
             </div>
         </SkeletonWrapper>
@@ -69,104 +56,109 @@ function AccountsManager({currency}: { currency: string }) {
 }
 
 function AccountRowView({account, formatter}: { account: AccountRow, formatter: Intl.NumberFormat }) {
-    const Icon = ACCOUNT_TYPE_ICONS[account.type as AccountType] ?? Wallet;
+    const Icon = accountIcon(account.type);
     return (
-        <div className="flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-                <Icon className="h-10 w-10 rounded-lg bg-sky-400/10 p-2 text-sky-500"/>
-                <div>
-                    <p className="flex items-center gap-2 font-semibold">
-                        {account.name}
-                        {account.archived && <Badge variant="outline">Archived</Badge>}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                        {[account.institution, ACCOUNT_TYPE_LABELS[account.type as AccountType]].filter(Boolean).join(' · ')}
-                        {account.walletCardName && ` · Apple Pay: ${account.walletCardName}`}
-                    </p>
-                </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-                <span className={account.type === 'credit' && account.balance < 0 ? "mr-2 font-mono text-amber-500" : "mr-2 font-mono"}>
-                    {formatBalance(account, formatter)}
+        <div className="flex items-center gap-3 rounded-2xl border-2 p-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-secondary"><Icon className="h-5 w-5"/></span>
+            <Link href={`/accounts/${account.id}`} className="flex min-w-0 flex-1 flex-col">
+                <span className="flex items-center gap-2 font-bold">
+                    <span className="truncate">{account.name}</span>
+                    {account.archived && <Badge variant="outline">Archived</Badge>}
                 </span>
-                <BalanceDialog account={account}/>
-                <AccountFormDialog account={account} trigger={
-                    <Button variant="secondary" size="icon" aria-label={`Edit ${account.name}`}><Pencil className="h-4 w-4"/></Button>
-                }/>
-                {account.transactionCount === 0 && <DeleteAccountDialog account={account}/>}
-            </div>
+                <span className="truncate text-xs font-semibold text-muted-foreground">
+                    {[account.institution, ACCOUNT_TYPE_LABELS[account.type as AccountType]].filter(Boolean).join(' · ')}
+                    {account.walletCardName && ` · Apple Pay: ${account.walletCardName}`}
+                </span>
+            </Link>
+            <span className="hidden font-display font-semibold money sm:inline">{formatBalance(account, formatter)}</span>
+            <AccountFormDialog account={account} trigger={
+                <Button variant="ghost" size="icon" aria-label={`Edit ${account.name}`}><Pencil/></Button>
+            }/>
+            {account.transactionCount === 0
+                ? <DeleteAccountButton account={account}/>
+                : <Link href={`/accounts/${account.id}`} aria-label={`Open ${account.name}`} className="text-muted-foreground"><ChevronRight/></Link>}
         </div>
     );
 }
 
-function AccountFormDialog({account, trigger}: { account?: AccountRow, trigger: ReactNode }) {
+export function AccountFormDialog({account, trigger}: { account?: AccountRow, trigger: ReactNode }) {
     const [open, setOpen] = useState(false);
     const [name, setName] = useState(account?.name ?? "");
     const [type, setType] = useState<AccountType>((account?.type as AccountType) ?? "checking");
     const [institution, setInstitution] = useState(account?.institution ?? "");
     const [walletCardName, setWalletCardName] = useState(account?.walletCardName ?? "");
     const [archived, setArchived] = useState(account?.archived ?? false);
-    const [balance, setBalance] = useState("0");
+    const [apy, setApy] = useState(account?.apy != null ? String(account.apy) : "");
+    const [maturesOn, setMaturesOn] = useState(account?.maturesOn ? new Date(account.maturesOn).toISOString().slice(0, 10) : "");
+    const [balance, setBalance] = useState("");
     const [day, setDay] = useState(ToDayString(new Date()));
-    const invalidate = useInvalidateAccounts();
+    const invalidate = useInvalidateMoney();
 
     const mutation = useMutation({
         mutationFn: async () => {
+            const cd = {
+                apy: apy.trim() === "" ? null : Number(apy),
+                maturesOn: maturesOn ? new Date(`${maturesOn}T00:00:00Z`) : null,
+            };
             if (account) {
-                return EditAccount({id: account.id, name, type, institution, walletCardName, archived});
+                return EditAccount({id: account.id, name, type, institution, walletCardName, archived, ...cd});
             }
             const value = Number(balance) || 0;
             return CreateAccount({
-                name, type, institution, walletCardName,
-                balance: type === 'credit' ? -value : value,
+                name, type, institution, walletCardName, ...cd,
+                balance: type === 'credit' ? -Math.abs(value) : value,
                 balanceDate: BalanceDateFromDay(day),
             });
         },
         onSuccess: async (response) => {
             if (!response.ok) {
-                toast.error(response.error, {id: 'account-form'});
+                toast.error(response.error);
                 return;
             }
-            toast.success(account ? "Account updated" : `Added ${name}`, {id: 'account-form'});
+            toast.success(account ? "Saved" : `Added ${name} 🎉`);
             await invalidate();
             setOpen(false);
             if (!account) {
                 setName("");
-                setBalance("0");
+                setBalance("");
             }
         },
-        onError: () => {
-            toast.error("Could not save the account", {id: 'account-form'});
-        },
+        onError: () => toast.error("Could not save the account"),
     });
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>{trigger}</DialogTrigger>
-            <DialogContent className="sm:max-w-[440px]">
+            <DialogContent className="sm:max-w-[480px]">
                 <DialogHeader>
-                    <DialogTitle>{account ? `Edit ${account.name}` : "Add account"}</DialogTitle>
+                    <DialogTitle>{account ? `Edit ${account.name}` : "Add an account"}</DialogTitle>
+                    {!account && <DialogDescription>Start from what your bank shows today. Pennywise keeps it up to date from there.</DialogDescription>}
                 </DialogHeader>
                 <form className="flex flex-col gap-4" onSubmit={(e) => {
                     e.preventDefault();
                     mutation.mutate();
                 }}>
-                    <div className="flex flex-col gap-2">
-                        <Label htmlFor="account-name">Name</Label>
-                        <Input id="account-name" value={name} onChange={(e) => setName(e.target.value)}
-                               placeholder="e.g. Chase checking" maxLength={40} required/>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Type">
+                        {ACCOUNT_TYPES.map((t) => {
+                            const Icon = accountIcon(t);
+                            return (
+                                <button key={t} type="button" role="radio" aria-checked={type === t} onClick={() => setType(t)}
+                                        className={cn("flex flex-col items-start gap-1 rounded-2xl border-2 p-3 text-left transition-colors",
+                                            type === t ? "border-primary bg-primary-soft" : "border-border bg-card")}>
+                                    <Icon className="h-5 w-5"/>
+                                    <span className="text-sm font-extrabold">{ACCOUNT_TYPE_LABELS[t]}</span>
+                                    <span className="text-[11px] font-semibold leading-tight text-muted-foreground">{TYPE_HINTS[t]}</span>
+                                </button>
+                            );
+                        })}
                     </div>
-                    <div className="flex gap-4">
-                        <div className="flex flex-1 flex-col gap-2">
-                            <Label>Type</Label>
-                            <Select value={type} onValueChange={(v) => setType(v as AccountType)}>
-                                <SelectTrigger><SelectValue/></SelectTrigger>
-                                <SelectContent>
-                                    {ACCOUNT_TYPES.map((t) => <SelectItem key={t} value={t}>{ACCOUNT_TYPE_LABELS[t]}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="flex flex-col gap-2">
+                            <Label htmlFor="account-name">Name</Label>
+                            <Input id="account-name" value={name} onChange={(e) => setName(e.target.value)}
+                                   placeholder="e.g. Chase checking" maxLength={40} required/>
                         </div>
-                        <div className="flex flex-1 flex-col gap-2">
+                        <div className="flex flex-col gap-2">
                             <Label htmlFor="account-institution">Bank</Label>
                             <Input id="account-institution" list="institutions" value={institution}
                                    onChange={(e) => setInstitution(e.target.value)} placeholder="e.g. Chase" maxLength={60}/>
@@ -176,36 +168,50 @@ function AccountFormDialog({account, trigger}: { account?: AccountRow, trigger: 
                         </div>
                     </div>
                     {!account && (
-                        <div className="flex gap-4">
-                            <div className="flex flex-1 flex-col gap-2">
-                                <Label htmlFor="account-balance">{type === 'credit' ? "Amount owed" : "Current balance"}</Label>
-                                <Input id="account-balance" type="number" step="0.01" inputMode="decimal" value={balance}
-                                       onChange={(e) => setBalance(e.target.value)}/>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="flex flex-col gap-2">
+                                <Label htmlFor="account-balance">{type === 'credit' ? "You owe" : "Balance"}</Label>
+                                <Input id="account-balance" inputMode="decimal" placeholder="0.00" value={balance}
+                                       onChange={(e) => setBalance(e.target.value.replace(/[^0-9.-]/g, ""))}/>
                             </div>
-                            <div className="flex flex-1 flex-col gap-2">
+                            <div className="flex flex-col gap-2">
                                 <Label htmlFor="account-balance-day">As of</Label>
                                 <Input id="account-balance-day" type="date" value={day} onChange={(e) => setDay(e.target.value)} required/>
                             </div>
                         </div>
                     )}
-                    <div className="flex flex-col gap-2">
-                        <Label htmlFor="account-wallet">Apple Wallet card name (optional)</Label>
-                        <Input id="account-wallet" value={walletCardName} onChange={(e) => setWalletCardName(e.target.value)}
-                               placeholder="e.g. Discover it" maxLength={80}/>
-                        <p className="text-xs text-muted-foreground">
-                            The card&apos;s name in the Wallet app. Apple Pay purchases logged by the shortcut are filed under this account.
-                        </p>
-                    </div>
+                    {type === "cd" && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="flex flex-col gap-2">
+                                <Label htmlFor="account-apy">Rate (APY %)</Label>
+                                <Input id="account-apy" inputMode="decimal" placeholder="e.g. 4.10" value={apy}
+                                       onChange={(e) => setApy(e.target.value.replace(/[^0-9.]/g, ""))}/>
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                <Label htmlFor="account-matures">Matures on</Label>
+                                <Input id="account-matures" type="date" value={maturesOn} onChange={(e) => setMaturesOn(e.target.value)}/>
+                            </div>
+                        </div>
+                    )}
+                    {(type === "credit" || type === "checking") && (
+                        <div className="flex flex-col gap-2">
+                            <Label htmlFor="account-wallet">Apple Wallet card name (optional)</Label>
+                            <Input id="account-wallet" value={walletCardName} onChange={(e) => setWalletCardName(e.target.value)}
+                                   placeholder="e.g. Discover it" maxLength={80}/>
+                            <p className="text-xs text-muted-foreground">
+                                The card&apos;s name in Wallet, so Apple Pay purchases land in this account.
+                            </p>
+                        </div>
+                    )}
                     {account && (
-                        <label className="flex items-center justify-between gap-2 text-sm">
-                            <span>Archived <span className="text-muted-foreground">(hidden when adding transactions)</span></span>
+                        <label className="flex items-center justify-between gap-2 rounded-2xl bg-secondary p-3 text-sm font-semibold">
+                            <span>Archived <span className="font-normal text-muted-foreground">(hidden from Home and forms)</span></span>
                             <Switch checked={archived} onCheckedChange={setArchived}/>
                         </label>
                     )}
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                        <Button type="submit" disabled={mutation.isPending || !name.trim()}>
-                            {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : account ? "Save" : "Add account"}
+                        <Button type="submit" size="lg" disabled={mutation.isPending || !name.trim()}>
+                            {mutation.isPending ? <Loader2 className="animate-spin"/> : account ? "Save" : "Add account"}
                         </Button>
                     </DialogFooter>
                 </form>
@@ -214,105 +220,27 @@ function AccountFormDialog({account, trigger}: { account?: AccountRow, trigger: 
     );
 }
 
-function BalanceDialog({account}: { account: AccountRow }) {
-    const [open, setOpen] = useState(false);
-    const isCredit = account.type === 'credit';
-    const [balance, setBalance] = useState("");
-    const [day, setDay] = useState(ToDayString(new Date()));
-    const invalidate = useInvalidateAccounts();
-
-    const mutation = useMutation({
-        mutationFn: () => {
-            const value = Number(balance) || 0;
-            return SetAccountBalance({id: account.id, balance: isCredit ? -value : value, balanceDate: BalanceDateFromDay(day)});
-        },
-        onSuccess: async () => {
-            toast.success(`Updated the balance of ${account.name}`, {id: 'account-balance'});
-            await invalidate();
-            setOpen(false);
-        },
-        onError: () => {
-            toast.error("Could not update the balance", {id: 'account-balance'});
-        },
-    });
-
-    return (
-        <Dialog open={open} onOpenChange={(next) => {
-            if (next) setBalance(String(Math.abs(account.balance)));
-            setOpen(next);
-        }}>
-            <DialogTrigger asChild>
-                <Button variant="secondary" className="gap-2"><Scale className="h-4 w-4"/>Balance</Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[400px]">
-                <DialogHeader>
-                    <DialogTitle>Update {account.name} balance</DialogTitle>
-                    <DialogDescription>
-                        Enter the balance your bank shows. Transactions dated after that day are added on top of it.
-                    </DialogDescription>
-                </DialogHeader>
-                <form className="flex flex-col gap-4" onSubmit={(e) => {
-                    e.preventDefault();
-                    mutation.mutate();
-                }}>
-                    <div className="flex gap-4">
-                        <div className="flex flex-1 flex-col gap-2">
-                            <Label htmlFor={`balance-${account.id}`}>{isCredit ? "Amount owed" : "Balance"}</Label>
-                            <Input id={`balance-${account.id}`} type="number" step="0.01" inputMode="decimal" value={balance}
-                                   onChange={(e) => setBalance(e.target.value)} required/>
-                        </div>
-                        <div className="flex flex-1 flex-col gap-2">
-                            <Label htmlFor={`balance-day-${account.id}`}>As of</Label>
-                            <Input id={`balance-day-${account.id}`} type="date" value={day} onChange={(e) => setDay(e.target.value)} required/>
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                        <Button type="submit" disabled={mutation.isPending}>
-                            {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : "Save"}
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-function DeleteAccountDialog({account}: { account: AccountRow }) {
-    const invalidate = useInvalidateAccounts();
+function DeleteAccountButton({account}: { account: AccountRow }) {
+    const [confirm, setConfirm] = useState(false);
+    const invalidate = useInvalidateMoney();
     const mutation = useMutation({
         mutationFn: () => DeleteAccount({id: account.id}),
         onSuccess: async (response) => {
             if (!response.ok) {
-                toast.error(response.error, {id: 'account-delete'});
+                toast.error(response.error);
                 return;
             }
-            toast.success(`Deleted ${account.name}`, {id: 'account-delete'});
+            toast.success(`Deleted ${account.name}`);
             await invalidate();
         },
-        onError: () => {
-            toast.error("Could not delete the account", {id: 'account-delete'});
-        },
+        onError: () => toast.error("Could not delete the account"),
     });
 
     return (
-        <AlertDialog>
-            <AlertDialogTrigger asChild>
-                <Button variant="secondary" size="icon" aria-label={`Delete ${account.name}`} className="hover:bg-red-400 hover:text-white">
-                    <Trash2 className="h-4 w-4"/>
-                </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Delete {account.name}?</AlertDialogTitle>
-                    <AlertDialogDescription>It has no transactions, so nothing else is affected.</AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => mutation.mutate()}>Delete</AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+        <Button variant={confirm ? "destructive" : "ghost"} size={confirm ? "sm" : "icon"} aria-label={`Delete ${account.name}`}
+                onClick={() => confirm ? mutation.mutate() : setConfirm(true)} onBlur={() => setConfirm(false)}>
+            <Trash2/>{confirm && "Delete?"}
+        </Button>
     );
 }
 

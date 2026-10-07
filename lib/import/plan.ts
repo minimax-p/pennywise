@@ -1,10 +1,11 @@
 import {Account, Prisma} from "@prisma/client";
 import prisma from "@/lib/prisma";
 import {payeeKey, payeesSimilar} from "@/lib/payee";
-import {fingerprintRows, StatementRow} from "@/lib/import/parse";
+import {fingerprintRows, StatementBalance, StatementRow} from "@/lib/import/parse";
 import {categorizationFields, CategorySuggestion, suggestCategories} from "@/lib/categorize/suggest";
-import {getTransferCategory} from "@/lib/accounts";
-import {applyHistoryChanges} from "@/lib/history";
+import {getTransferCategory, intervalSummary, loadLedger} from "@/lib/accounts";
+import {CENT} from "@/lib/ledger";
+import {bankFromCode, isSelf, parseSelfNames, parseZelle} from "@/lib/import/zelle";
 
 // Decides what to do with each statement line before anything is saved:
 // - duplicate:  imported before (same line, or the same purchase from a CSV and a QFX file)
@@ -34,6 +35,8 @@ export type PlanRow = {
     linkTransactionId: string | null;
     // Shown in the preview, e.g. why a line was matched or skipped
     note: string | null;
+    // The bank's memo, saved as the transaction's note
+    memo?: string | null;
 };
 
 const TRANSFER_WORDS = /\b(TRANSFER|XFER|PAYMENT|PYMT|PMT|E-PAYMENT|EPAYMENT|AUTOPAY|AUTO PAY|CASHOUT|CASH OUT|DEPOSIT FROM|WITHDRAWAL TO|THANK YOU)\b/i;
@@ -70,6 +73,25 @@ function guessTransferAccount(row: StatementRow, account: Account, others: Accou
     return null;
 }
 
+const sameBank = (a: Account, b: Account) =>
+    Boolean(a.institution && b.institution && a.institution.trim().toLowerCase() === b.institution.trim().toLowerCase());
+
+// For a Zelle payment to or from yourself: the account on the other end, or null when it
+// could be more than one. Undefined when the line isn't one.
+function selfTransferAccount(row: StatementRow, account: Account, others: Account[], selfNames: string[][]): Account | null | undefined {
+    const zelle = parseZelle(row.description);
+    if (!zelle || !isSelf(zelle.name, selfNames)) return undefined;
+    // Zelle only reaches bank accounts
+    const candidates = others.filter((o) => o.type === "checking" || o.type === "savings");
+    // On money received, the confirmation code starts with the sending bank's code
+    const bank = zelle.direction === "from" ? bankFromCode(zelle.code)?.toLowerCase() : null;
+    const atBank = bank ? candidates.filter((o) => o.institution?.toLowerCase().includes(bank)) : [];
+    if (atBank.length === 1) return atBank[0];
+    const elsewhere = candidates.filter((o) => !sameBank(o, account));
+    if (elsewhere.length === 1) return elsewhere[0];
+    return candidates.length === 1 ? candidates[0] : null;
+}
+
 export async function planImport(userId: string, account: Account, rows: StatementRow[]): Promise<PlanRow[]> {
     const fingerprints = fingerprintRows(rows);
     const imported = new Set((await prisma.importedRow.findMany({
@@ -78,6 +100,8 @@ export async function planImport(userId: string, account: Account, rows: Stateme
     })).map((r) => r.fingerprint));
 
     const others = await prisma.account.findMany({where: {userId, id: {not: account.id}, archived: false}});
+    const settings = await prisma.userSettings.findUnique({where: {userId}});
+    const selfNames = parseSelfNames(settings?.selfNames);
 
     // Transactions near the statement's dates that a line could be joined to
     const times = rows.map((r) => r.date.getTime());
@@ -109,6 +133,7 @@ export async function planImport(userId: string, account: Account, rows: Stateme
             suggestion: null,
             transferAccountId: null,
             linkTransactionId: null,
+            memo: row.memo ?? null,
         };
 
         if (imported.has(fingerprints[i])) {
@@ -184,6 +209,17 @@ export async function planImport(userId: string, account: Account, rows: Stateme
             };
         }
 
+        const toSelf = selfTransferAccount(row, account, others, selfNames);
+        if (toSelf !== undefined) {
+            return {
+                ...base, status: "new", include: true, kind: "transfer", category: null,
+                transferAccountId: toSelf?.id ?? null,
+                note: toSelf
+                    ? `Zelle ${row.amount < 0 ? "to" : "from"} yourself: ${row.amount < 0 ? "to" : "from"} ${toSelf.name}`
+                    : "Zelle with yourself: pick the other account",
+            };
+        }
+
         const transferAccount = guessTransferAccount(row, account, others);
         if (transferAccount) {
             return {
@@ -208,11 +244,25 @@ export async function planImport(userId: string, account: Account, rows: Stateme
         : {...row, category: suggestions[i].name, suggestion: suggestions[i]});
 }
 
-export type CommitResult = { created: number, linked: number, skipped: number };
+export type CommitResult = {
+    created: number,
+    linked: number,
+    skipped: number,
+    // How the statement's balances compare with the transactions, when it had balances
+    statement: {
+        checks: number,
+        lastDate: string,
+        lastBalance: number,
+        // Days where the transactions don't add up to the statement's change in balance
+        mismatches: number,
+        latestMismatch: ReturnType<typeof intervalSummary> | null,
+    } | null,
+};
 
-// Saves the rows the user kept. Lines imported in the meantime are skipped.
-export async function commitImport(userId: string, account: Account, rows: PlanRow[]): Promise<CommitResult> {
-    const result: CommitResult = {created: 0, linked: 0, skipped: 0};
+// Saves the rows the user kept, oldest first so the order within a day matches the bank's.
+// Lines imported in the meantime are skipped. Statement balances become balance checks.
+export async function commitImport(userId: string, account: Account, rows: PlanRow[], balances: StatementBalance[] = []): Promise<CommitResult> {
+    const result: CommitResult = {created: 0, linked: 0, skipped: 0, statement: null};
     const transferCategory = await getTransferCategory();
     for (const type of ["income", "expense"]) {
         if (!await prisma.category.findFirst({where: {name: "Unsorted", type, isUniversal: true}})) {
@@ -228,19 +278,27 @@ export async function commitImport(userId: string, account: Account, rows: PlanR
             ?? categories.find((c) => c.type === type && c.name === "Unsorted" && c.isUniversal))!.id;
     const ownAccounts = new Set((await prisma.account.findMany({where: {userId}, select: {id: true}})).map((a) => a.id));
 
+    // Statements list lines newest first or oldest first
+    const newestFirst = rows.length > 1 && new Date(rows[0].date) > new Date(rows[rows.length - 1].date);
+    const ordered = newestFirst ? [...rows].reverse() : rows;
+    // Created one millisecond apart, so lines on the same day keep the statement's order
+    const start = Date.now();
+
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const already = new Set((await tx.importedRow.findMany({
             where: {accountId: account.id, fingerprint: {in: rows.map((r) => r.fingerprint)}},
             select: {fingerprint: true},
         })).map((r) => r.fingerprint));
 
-        for (const row of rows) {
+        for (const [index, row] of ordered.entries()) {
             if (!row.include || already.has(row.fingerprint)) {
                 result.skipped++;
                 continue;
             }
             const date = new Date(row.date);
             const amount = Math.abs(row.amount);
+            const createdAt = new Date(start + index);
+            const note = row.memo || null;
             let transactionId: string;
 
             if (row.linkTransactionId) {
@@ -258,11 +316,10 @@ export async function commitImport(userId: string, account: Account, rows: PlanR
                 }
                 if (row.status === "match") {
                     // The bank's amount and date are final (tips, holds)
-                    await tx.transaction.update({where: {id: existing.id}, data: {amount, date}});
-                    await applyHistoryChanges(tx, userId, [
-                        {date: existing.date, type: existing.type, amount: -existing.amount},
-                        {date, type: existing.type, amount},
-                    ]);
+                    await tx.transaction.update({
+                        where: {id: existing.id},
+                        data: {amount, date, ...(note && !existing.note ? {note} : {})},
+                    });
                 } else if (row.status === "pair") {
                     // The mirrored expense or income becomes one transfer between the two accounts
                     const otherId = existing.accountId!;
@@ -274,9 +331,10 @@ export async function commitImport(userId: string, account: Account, rows: PlanR
                             accountId: row.amount < 0 ? account.id : otherId,
                             toAccountId: row.amount < 0 ? otherId : account.id,
                             payeeKey: null,
+                            needsReview: false,
+                            categorizedBy: null,
                         },
                     });
-                    await applyHistoryChanges(tx, userId, [{date: existing.date, type: existing.type, amount: -existing.amount}]);
                 }
                 transactionId = existing.id;
                 result.linked++;
@@ -287,38 +345,70 @@ export async function commitImport(userId: string, account: Account, rows: PlanR
                 }
                 const created = await tx.transaction.create({
                     data: {
-                        userId, amount, date, description: row.description, type: "transfer", source: "import",
+                        userId, amount, date, createdAt, description: row.description, type: "transfer", source: "import",
                         categoryId: transferCategory.id,
                         accountId: row.amount < 0 ? account.id : row.transferAccountId,
                         toAccountId: row.amount < 0 ? row.transferAccountId : account.id,
+                        note,
                     },
                 });
                 transactionId = created.id;
                 result.created++;
             } else {
-                const type = row.kind;
+                // Money back in a spending category, like a refund, keeps that category
+                const type = row.amount > 0 ? "income" : "expense";
+                const categoryType = row.kind;
                 const category = row.category ?? "Unsorted";
                 // Changing the suggested category in the preview counts as sorting it yourself
                 const pickedByYou = !row.suggestion || row.suggestion.name !== category;
                 const created = await tx.transaction.create({
                     data: {
-                        userId, amount, date, description: row.description, type, source: "import",
-                        categoryId: categoryId(type, category),
+                        userId, amount, date, createdAt, description: row.description, type, source: "import",
+                        categoryId: categoryId(categoryType, category),
                         accountId: account.id,
                         payeeKey: payeeKey(row.description),
+                        note,
                         ...(pickedByYou
                             ? {categorizedBy: "you", needsReview: category === "Unsorted"}
                             : categorizationFields(row.suggestion!)),
                     },
                 });
-                await applyHistoryChanges(tx, userId, [{date, type, amount}]);
                 transactionId = created.id;
                 result.created++;
             }
 
             await tx.importedRow.create({data: {accountId: account.id, fingerprint: row.fingerprint, transactionId}});
         }
+
+        if (balances.length > 0) {
+            // A statement covering the same days again replaces its earlier balances
+            await tx.balanceCheck.deleteMany({
+                where: {
+                    accountId: account.id, source: "statement",
+                    date: {gte: balances[0].date, lte: balances[balances.length - 1].date},
+                },
+            });
+            await tx.balanceCheck.createMany({
+                data: balances.map((b) => ({accountId: account.id, date: b.date, balance: b.balance, source: "statement"})),
+            });
+        }
     }, {maxWait: 10_000, timeout: 120_000});
+
+    if (balances.length > 0) {
+        const first = balances[0].date.getTime(), last = balances[balances.length - 1].date.getTime();
+        const ledger = await loadLedger(account.id);
+        const mismatched = ledger.intervals.filter((i) =>
+            i.to.source === "statement" && i.to.date.getTime() >= first && i.to.date.getTime() <= last
+            && Math.abs(i.difference) >= CENT);
+        const closing = balances[balances.length - 1];
+        result.statement = {
+            checks: balances.length,
+            lastDate: closing.date.toISOString(),
+            lastBalance: closing.balance,
+            mismatches: mismatched.length,
+            latestMismatch: mismatched.length ? intervalSummary(mismatched[mismatched.length - 1]) : null,
+        };
+    }
 
     return result;
 }

@@ -22,8 +22,31 @@ const config: Config = {
     			},
     			primary: {
     				DEFAULT: 'hsl(var(--primary))',
-    				foreground: 'hsl(var(--primary-foreground))'
+    				foreground: 'hsl(var(--primary-foreground))',
+    				lip: 'hsl(var(--primary-lip))',
+    				soft: 'hsl(var(--primary-soft))'
     			},
+    			spend: {
+    				DEFAULT: 'hsl(var(--spend))',
+    				ink: 'hsl(var(--spend-ink))',
+    				soft: 'hsl(var(--spend-soft))'
+    			},
+    			income: {
+    				DEFAULT: 'hsl(var(--income))',
+    				ink: 'hsl(var(--income-ink))',
+    				soft: 'hsl(var(--income-soft))'
+    			},
+    			move: {
+    				DEFAULT: 'hsl(var(--move))',
+    				ink: 'hsl(var(--move-ink))',
+    				soft: 'hsl(var(--move-soft))'
+    			},
+    			sun: {
+    				DEFAULT: 'hsl(var(--sun))',
+    				ink: 'hsl(var(--sun-ink))',
+    				soft: 'hsl(var(--sun-soft))'
+    			},
+    			coin: 'hsl(var(--coin))',
     			secondary: {
     				DEFAULT: 'hsl(var(--secondary))',
     				foreground: 'hsl(var(--secondary-foreground))'
@@ -38,12 +61,15 @@ const config: Config = {
     			},
     			destructive: {
     				DEFAULT: 'hsl(var(--destructive))',
-    				foreground: 'hsl(var(--destructive-foreground))'
+    				foreground: 'hsl(var(--destructive-foreground))',
+    				lip: 'hsl(var(--destructive-lip))'
     			},
     			border: 'hsl(var(--border))',
     			input: 'hsl(var(--input))',
     			ring: 'hsl(var(--ring))',
     			chart: {
+    				spend: 'hsl(var(--chart-spend))',
+    				income: 'hsl(var(--chart-income))',
     				'1': 'hsl(var(--chart-1))',
     				'2': 'hsl(var(--chart-2))',
     				'3': 'hsl(var(--chart-3))',
@@ -63,8 +89,8 @@ const config: Config = {
     		},
     		borderRadius: {
     			lg: 'var(--radius)',
-    			md: 'calc(var(--radius) - 2px)',
-    			sm: 'calc(var(--radius) - 4px)'
+    			md: 'calc(var(--radius) - 4px)',
+    			sm: 'calc(var(--radius) - 8px)'
     		},
     		keyframes: {
     			'accordion-down': {
@@ -89,8 +115,9 @@ const config: Config = {
     			'accordion-up': 'accordion-up 0.2s ease-out'
     		},
 			fontFamily: {
-				sans: ['var(--font-geist-sans)'],
-				mono: ['var(--font-geist-mono)'],
+				sans: ['var(--font-nunito)', 'ui-rounded', 'system-ui', 'sans-serif'],
+				display: ['var(--font-fredoka)', 'var(--font-nunito)', 'ui-rounded', 'system-ui', 'sans-serif'],
+				mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
 			},
     	}
     },

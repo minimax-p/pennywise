@@ -1,33 +1,16 @@
-"use client";
-
 import React from "react";
-import Image from "next/image";
-import pennywiseLogo from "./logo/Frame.png";
-// import pennywiseLogo from "./logo/all-gold.png";
-function Logo() {
-    return (
-        <a href="/" className="flex items-center gap-2">
-            <Image
-                src={pennywiseLogo}
-                alt="Pennywise Logo"
-                className="h-11 w-11 object-contain"
-                width={80} // Set width for image optimization
-                height={80} // Set height for image optimization
-            />
-            <p className="text-3xl font-mono font-bold leading-tight tracking-tighter text-primary">
-                Pennywise
-            </p>
-        </a>
-    );
-}
+import Link from "next/link";
+import PennyMark from "@/components/PennyMark";
+import {cn} from "@/lib/utils";
 
-export function LogoMobile() {
+function Logo({className, compact}: { className?: string, compact?: boolean }) {
     return (
-        <a href="/" className="flex items-center gap-2">
-            <p className="text-3xl font-mono font-bold leading-tight tracking-tighter text-primary">
+        <Link href="/" className={cn("flex items-center gap-2", className)} aria-label="Pennywise home">
+            <PennyMark className={compact ? "h-8 w-8" : "h-10 w-10"}/>
+            <span className={cn("font-display font-bold tracking-tight text-foreground", compact ? "text-xl" : "text-2xl")}>
                 Pennywise
-            </p>
-        </a>
+            </span>
+        </Link>
     );
 }
 

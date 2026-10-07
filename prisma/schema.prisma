@@ -10,8 +10,11 @@ datasource db {
 }
 
 model UserSettings {
-  userId   String @id
-  currency String
+  userId    String  @id
+  currency  String
+  // Your name as banks print it, comma separated, e.g. "HUU NHAT MINH PHAM".
+  // Zelle payments to or from it are moves between your own accounts.
+  selfNames String?
 }
 
 model Category {
@@ -34,6 +37,8 @@ model Transaction {
   amount      Float
   description String
   date        DateTime
+  // income, expense, transfer or adjustment. Whether money counts as spending or
+  // income follows the category: money back in a spending category is a refund.
   type        String   @default("income")
   userId      String
   categoryId  String
@@ -45,10 +50,13 @@ model Transaction {
   plaidItemId        String?
   plaidItem          PlaidItem? @relation(fields: [plaidItemId], references: [id], onDelete: SetNull)
 
-  // Where the money came from (for transfers) or went in or out of
+  // Zelle memo, Venmo note, statement memo or your own note
+  note        String?  @db.VarChar(500)
+
+  // Where the money came from (for transfers and adjustments out) or went in or out of
   accountId          String?
   account            Account?      @relation("AccountTransactions", fields: [accountId], references: [id], onDelete: SetNull)
-  // Transfers only: the account the money went to
+  // Transfers and adjustments in: the account the money went to
   toAccountId        String?
   toAccount          Account?      @relation("TransferDestination", fields: [toAccountId], references: [id], onDelete: SetNull)
   // How it was entered: manual, import, apple_pay or plaid
@@ -76,13 +84,12 @@ model Account {
   id                String        @id @default(uuid())
   userId            String
   name              String
-  // checking, savings, credit or cash
+  // checking, savings, cd, credit or cash
   type              String
   institution       String?
-  // A balance the user entered and when it was true. The current balance adds
-  // the transactions dated after it, so older imports don't shift it.
-  knownBalance      Float         @default(0)
-  knownBalanceDate  DateTime      @default(now())
+  // CDs only: yearly rate in percent and the day it matures
+  apy               Float?
+  maturesOn         DateTime?
   // Card name as Apple Wallet shows it, used to file Apple Pay purchases
   walletCardName    String?
   // Column mapping remembered from the last CSV import
@@ -93,8 +100,29 @@ model Account {
   transactions      Transaction[] @relation("AccountTransactions")
   incomingTransfers Transaction[] @relation("TransferDestination")
   importedRows      ImportedRow[]
+  balanceChecks     BalanceCheck[]
 
   @@unique([userId, name])
+}
+
+// A balance the bank showed, typed in or read from a statement. An account's balance
+// is its latest check plus the transactions dated after it, so importing older
+// statements never shifts it. Each check also verifies that the transactions since
+// the check before it add up to the bank's change in balance.
+model BalanceCheck {
+  id        String   @id @default(uuid())
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  // When the balance was true: now for a balance checked today, the end of the day
+  // for a past day. Transactions dated after it are added on top.
+  date      DateTime
+  // Negative when money is owed, as on a credit card
+  balance   Float
+  // you or statement
+  source    String
+  createdAt DateTime @default(now())
+
+  @@index([accountId, date])
 }
 
 // One line of an imported bank statement. Lets re-imports skip lines already
@@ -143,25 +171,4 @@ model PlaidItem {
   transactions    Transaction[]
 
   @@index([userId])
-}
-
-model MonthHistory {
-  userId  String
-  day     Int
-  month   Int
-  year    Int
-  income  Float
-  expense Float
-
-  @@id([day, month, year, userId])
-}
-
-model YearHistory {
-  userId  String
-  month   Int
-  year    Int
-  income  Float
-  expense Float
-
-  @@id([month, year, userId])
 }

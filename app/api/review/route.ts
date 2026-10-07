@@ -1,7 +1,7 @@
 import {currentUser} from "@/lib/auth";
 import {redirect} from "next/navigation";
 import prisma from "@/lib/prisma";
-import {GetFormatterForCurrency} from "@/lib/helpers";
+import {currencyFormatter, toTransactionRow, transactionRowInclude} from "@/lib/transactionRows";
 import {jevEnabled} from "@/lib/categorize/jev";
 import {TRUSTED_CATEGORY} from "@/lib/categorize/suggest";
 
@@ -21,19 +21,14 @@ const MAX_CHOICES = 4;
 type Choice = { name: string, icon: string, probability: number | null };
 
 async function getReviewQueue(userId: string) {
-    const userSettings = await prisma.userSettings.findUnique({where: {userId}});
-    const formatter = GetFormatterForCurrency(userSettings?.currency ?? 'USD');
+    const formatter = await currencyFormatter(userId);
 
     const where = {userId, needsReview: true, type: {in: ["income", "expense"]}};
     const [total, transactions, categories] = await Promise.all([
         prisma.transaction.count({where}),
         prisma.transaction.findMany({
             where,
-            include: {
-                category: {select: {name: true, icon: true}},
-                account: {select: {name: true}},
-                plaidItem: {select: {institutionName: true}},
-            },
+            include: transactionRowInclude,
             orderBy: [{date: 'desc'}, {createdAt: 'desc'}],
             take: MAX_ITEMS,
         }),
@@ -73,19 +68,7 @@ async function getReviewQueue(userId: string) {
         for (const c of frequent(t.type)) add(c.name, null);
 
         return {
-            id: t.id,
-            amount: t.amount,
-            formattedAmount: formatter.format(t.amount),
-            description: t.description,
-            date: t.date,
-            type: t.type,
-            category: t.category,
-            accountId: t.accountId,
-            accountName: t.account?.name ?? null,
-            toAccountId: t.toAccountId,
-            toAccountName: null,
-            entrySource: t.source,
-            source: t.plaidTransactionId ? t.plaidItem?.institutionName ?? 'Bank' : null,
+            ...toTransactionRow(t, formatter),
             categorizedBy: t.categorizedBy,
             confidence: t.categoryConfidence,
             choices,

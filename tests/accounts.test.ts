@@ -16,8 +16,9 @@ vi.mock("next/navigation", () => ({
 }));
 
 import prisma from "@/lib/prisma";
-import {getBalance} from "@/lib/accounts";
-import {CreateAccount, DeleteAccount, SetAccountBalance} from "@/app/(dashboard)/_actions/accounts";
+import {getBalance, loadLedger} from "@/lib/accounts";
+import {getTotals} from "@/lib/reports";
+import {CheckBalance, CreateAccount, DeleteAccount, DeleteBalanceCheck, EditAccount} from "@/app/(dashboard)/_actions/accounts";
 import {CreateTransaction, CreateTransfer, DeleteTransaction, EditTransaction} from "@/app/(dashboard)/_actions/transactions";
 
 const userIds = [userId, otherUserId];
@@ -25,8 +26,6 @@ const userIds = [userId, otherUserId];
 async function cleanUp() {
     await prisma.transaction.deleteMany({where: {userId: {in: userIds}}});
     await prisma.account.deleteMany({where: {userId: {in: userIds}}});
-    await prisma.monthHistory.deleteMany({where: {userId: {in: userIds}}});
-    await prisma.yearHistory.deleteMany({where: {userId: {in: userIds}}});
 }
 
 async function created(promise: ReturnType<typeof CreateAccount>) {
@@ -39,9 +38,16 @@ async function balanceOf(id: string) {
     return getBalance(await prisma.account.findUniqueOrThrow({where: {id}}));
 }
 
+// Spending and income in a month of 2026 (0 = January)
 async function monthExpense(month: number) {
-    const row = await prisma.yearHistory.findUnique({where: {month_year_userId: {userId, month, year: 2026}}});
-    return {income: row?.income ?? 0, expense: row?.expense ?? 0};
+    const {spending, income} = await getTotals(userId, new Date(Date.UTC(2026, month, 1)), new Date(Date.UTC(2026, month + 1, 1) - 1));
+    return {income, expense: spending};
+}
+
+async function checked(promise: ReturnType<typeof CheckBalance>) {
+    const result = await promise;
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
 }
 
 describe.skipIf(!testDatabaseUrl)("accounts and transfers", () => {
@@ -79,8 +85,65 @@ describe.skipIf(!testDatabaseUrl)("accounts and transfers", () => {
         await CreateTransaction({amount: 25, category: "Groceries", type: "expense", date: sept(2), accountId: chase.id});
         expect(await balanceOf(chase.id)).toBe(475);
 
-        await SetAccountBalance({id: chase.id, balance: 300, balanceDate: new Date("2026-09-30T23:59:59.999Z")});
+        await checked(CheckBalance({accountId: chase.id, balance: 300, balanceDate: new Date("2026-09-30T23:59:59.999Z"), save: true}));
         expect(await balanceOf(chase.id)).toBe(300);
+    });
+
+    it("compares a balance check with the transactions before saving it", async () => {
+        const chase = await created(CreateAccount({name: "Chase checking", type: "checking", balance: 500, balanceDate}));
+        await CreateTransaction({amount: 25, category: "Groceries", type: "expense", date: sept(2), accountId: chase.id});
+        await CreateTransaction({amount: 100, category: "Salary", type: "income", date: sept(3), accountId: chase.id});
+        const sept5 = new Date("2026-09-05T23:59:59.999Z");
+
+        // Matches: 500 - 25 + 100
+        expect(await checked(CheckBalance({accountId: chase.id, balance: 575, balanceDate: sept5, save: false})))
+            .toEqual({expected: 575, difference: 0, previousCheckAt: balanceDate.toISOString(), transactionsSince: 2, saved: false});
+
+        // The bank has 12.34 less: saved without an adjustment, the bank's number wins and the stretch is flagged
+        const preview = await checked(CheckBalance({accountId: chase.id, balance: 562.66, balanceDate: sept5, save: true}));
+        expect(preview).toMatchObject({expected: 575, difference: -12.34, saved: true});
+        expect(await balanceOf(chase.id)).toBe(562.66);
+        let ledger = await loadLedger(chase.id);
+        expect(ledger.intervals.map((i) => i.difference)).toEqual([-12.34]);
+
+        // Checking again with an adjustment makes the transactions add up
+        const check = await prisma.balanceCheck.findFirstOrThrow({where: {accountId: chase.id, balance: 562.66}});
+        expect(await DeleteBalanceCheck({id: check.id})).toEqual({ok: true, data: null});
+        await checked(CheckBalance({accountId: chase.id, balance: 562.66, balanceDate: sept5, save: true, adjust: true}));
+        ledger = await loadLedger(chase.id);
+        expect(ledger.intervals.map((i) => i.difference)).toEqual([0]);
+        expect(ledger.balance).toBe(562.66);
+        const adjustment = await prisma.transaction.findFirstOrThrow({where: {userId, type: "adjustment"}, include: {category: true}});
+        expect(adjustment).toMatchObject({amount: 12.34, accountId: chase.id, toAccountId: null, category: {name: "Adjustment"}});
+        // Adjustments are neither spending nor income
+        expect(await monthExpense(8)).toEqual({income: 100, expense: 25});
+    });
+
+    it("uses the latest of several checks with nothing in between", async () => {
+        const savings = await created(CreateAccount({name: "Savings", type: "savings", balance: 1000, balanceDate}));
+        const later = new Date("2026-09-02T23:59:59.999Z");
+        await checked(CheckBalance({accountId: savings.id, balance: 1003.5, balanceDate: later, save: true}));
+        expect(await balanceOf(savings.id)).toBe(1003.5);
+    });
+
+    it("keeps CD details only on CDs", async () => {
+        const cd = await created(CreateAccount({
+            name: "12-month CD", type: "cd", institution: "Capital One", balance: 10000, balanceDate,
+            apy: 4.1, maturesOn: new Date("2027-03-01T00:00:00Z"),
+        }));
+        expect(cd).toMatchObject({apy: 4.1, maturesOn: new Date("2027-03-01T00:00:00Z")});
+        const edited = await EditAccount({id: cd.id, name: "Savings", type: "savings", archived: false, apy: 4.1});
+        expect(edited.ok && edited.data).toMatchObject({apy: null, maturesOn: null});
+    });
+
+    it("counts money back in a spending category as less spending", async () => {
+        const discover = await created(CreateAccount({name: "Discover", type: "credit", balance: 0, balanceDate}));
+        await CreateTransaction({amount: 80, category: "Groceries", type: "expense", date: sept(4), accountId: discover.id});
+        await CreateTransaction({amount: 30, category: "Groceries", categoryType: "expense", type: "income", date: sept(6), accountId: discover.id, note: "returned eggs"});
+        expect(await monthExpense(8)).toEqual({income: 0, expense: 50});
+        expect(await balanceOf(discover.id)).toBe(-50);
+        const refund = await prisma.transaction.findFirstOrThrow({where: {userId, type: "income"}, include: {category: true}});
+        expect(refund).toMatchObject({note: "returned eggs", category: {name: "Groceries", type: "expense"}});
     });
 
     it("converts between expense and transfer, keeping history totals right", async () => {
@@ -108,6 +171,10 @@ describe.skipIf(!testDatabaseUrl)("accounts and transfers", () => {
     it("rejects other users' accounts and transfers to the same account", async () => {
         const mine = await created(CreateAccount({name: "Chase checking", type: "checking", balance: 0, balanceDate}));
         const theirs = await prisma.account.create({data: {userId: otherUserId, name: "Theirs", type: "checking"}});
+        const theirCheck = await prisma.balanceCheck.create({data: {accountId: theirs.id, date: balanceDate, balance: 1, source: "you"}});
+        expect(await DeleteBalanceCheck({id: theirCheck.id})).toEqual({ok: false, error: "Balance check not found"});
+        expect(await CheckBalance({accountId: theirs.id, balance: 1, balanceDate, save: true}))
+            .toEqual({ok: false, error: "Account not found"});
 
         await expect(CreateTransaction({amount: 5, category: "Groceries", type: "expense", date: sept(1), accountId: theirs.id}))
             .rejects.toThrow("Account not found");

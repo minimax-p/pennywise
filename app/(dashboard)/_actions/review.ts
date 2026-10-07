@@ -20,31 +20,35 @@ async function requireUser() {
 const SortSchema = z.object({
     id: z.string().min(1),
     category: z.string().min(1).max(191),
+    // The category's type when it differs from the money's direction: money back in a
+    // spending category is a refund
+    categoryType: z.enum(["income", "expense"]).optional(),
     // Also sort the other waiting transactions from the same merchant
     applyToMerchant: z.boolean(),
 });
 
-export async function SortTransaction(form: z.infer<typeof SortSchema>): Promise<ActionResult<{ sorted: number }>> {
+export async function SortTransaction(form: z.input<typeof SortSchema>): Promise<ActionResult<{ sorted: number }>> {
     const parsed = SortSchema.safeParse(form);
     if (!parsed.success) return {ok: false, error: "Invalid request"};
     const user = await requireUser();
-    const {id, category, applyToMerchant} = parsed.data;
+    const {id, category, categoryType, applyToMerchant} = parsed.data;
 
     const transaction = await prisma.transaction.findFirst({where: {id, userId: user.id, type: {in: ["income", "expense"]}}});
     if (!transaction) return {ok: false, error: "Transaction not found"};
 
     const categories = await prisma.category.findMany({
-        where: {name: category, type: transaction.type, OR: [{userId: user.id}, {isUniversal: true}]},
+        where: {name: category, type: categoryType ?? transaction.type, OR: [{userId: user.id}, {isUniversal: true}]},
     });
     const categoryRow = categories.find((c) => c.userId === user.id) ?? categories[0];
     if (!categoryRow) return {ok: false, error: "Category not found"};
+    // Spending can't go in an income category
+    if (transaction.type === "expense" && categoryRow.type !== "expense") return {ok: false, error: "Pick a spending category"};
 
     const sorted = {categoryId: categoryRow.id, categorizedBy: "you", needsReview: categoryRow.name === "Unsorted", categoryConfidence: null};
     await prisma.transaction.update({where: {id}, data: sorted});
 
     let others = 0;
     if (applyToMerchant && transaction.payeeKey) {
-        // Category changes don't affect the daily and monthly totals, so no history update is needed
         const result = await prisma.transaction.updateMany({
             where: {userId: user.id, payeeKey: transaction.payeeKey, type: transaction.type, needsReview: true, NOT: {id}},
             data: {...sorted, categorizedBy: "history"},

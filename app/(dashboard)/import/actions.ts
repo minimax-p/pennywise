@@ -4,7 +4,9 @@ import {redirect} from "next/navigation";
 import {Prisma} from "@prisma/client";
 import {currentUser} from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import {applyMapping, ColumnMapping, guessMapping, parseFile, presetLabel} from "@/lib/import/parse";
+import {
+    applyMapping, ColumnMapping, guessMapping, parseFile, presetLabel, StatementBalance, statementBalances, withBalanceColumn
+} from "@/lib/import/parse";
 import {commitImport, CommitResult, planImport, PlanRow} from "@/lib/import/plan";
 import {ColumnMappingSchema, CommitImportSchema, CommitImportSchemaType} from "@/schema/import";
 
@@ -23,7 +25,12 @@ export type ImportPreview = {
     rows: PlanRow[];
     // Lines without a date or amount, like balance and footer lines
     skippedLines: number;
+    // End-of-day balances the statement shows, oldest first
+    balances: { date: string, balance: number }[];
 };
+
+const serializeBalances = (balances: StatementBalance[]) =>
+    balances.map((b) => ({date: b.date.toISOString(), balance: b.balance}));
 
 async function requireUser() {
     const user = await currentUser();
@@ -38,7 +45,7 @@ function savedMapping(settings: Prisma.JsonValue | null, headers: string[]): Col
     const parsed = ColumnMappingSchema.safeParse(settings);
     if (!parsed.success) return null;
     const columns = [parsed.data.date, parsed.data.description, parsed.data.amount, parsed.data.debit,
-        parsed.data.credit, parsed.data.direction, parsed.data.category, parsed.data.id];
+        parsed.data.credit, parsed.data.direction, parsed.data.category, parsed.data.id, parsed.data.balance];
     return columns.every((c) => !c || headers.includes(c)) ? parsed.data : null;
 }
 
@@ -67,11 +74,14 @@ export async function PreviewImport(formData: FormData): Promise<ActionResult<Im
     }
 
     if (parsed.format === "ofx") {
+        // Some banks report a card's balance owed as a positive number; only trust the usual sign
+        const balance = parsed.balance && (account.type !== "credit" || parsed.balance.balance <= 0) ? [parsed.balance] : [];
         return {
             ok: true,
             data: {
                 format: "ofx", detected: "OFX/QFX", headers: [], mapping: null,
                 rows: await planImport(user.id, account, parsed.rows), skippedLines: parsed.skipped,
+                balances: serializeBalances(balance),
             },
         };
     }
@@ -87,10 +97,10 @@ export async function PreviewImport(formData: FormData): Promise<ActionResult<Im
         }
         const result = ColumnMappingSchema.safeParse(json);
         if (!result.success) return {ok: false, error: "Invalid column choice"};
-        mapping = result.data;
+        mapping = withBalanceColumn(result.data, parsed.headers);
     } else {
-        mapping = savedMapping(account.importSettings, parsed.headers)
-            ?? guessMapping(parsed.headers, parsed.records, account.type);
+        const saved = savedMapping(account.importSettings, parsed.headers);
+        mapping = saved ? withBalanceColumn(saved, parsed.headers) : guessMapping(parsed.headers, parsed.records, account.type);
     }
 
     const {rows, skipped} = applyMapping(parsed.headers, parsed.records, mapping);
@@ -103,6 +113,7 @@ export async function PreviewImport(formData: FormData): Promise<ActionResult<Im
         data: {
             format: "csv", detected: presetLabel(mapping.preset), headers: parsed.headers, mapping,
             rows: await planImport(user.id, account, rows), skippedLines: skipped,
+            balances: serializeBalances(statementBalances(rows)),
         },
     };
 }
@@ -113,12 +124,13 @@ export async function CommitImport(form: CommitImportSchemaType): Promise<Action
         return {ok: false, error: "Invalid import data"};
     }
     const user = await requireUser();
-    const {accountId, rows, mapping} = parsedBody.data;
+    const {accountId, rows, mapping, balances} = parsedBody.data;
 
     const account = await prisma.account.findFirst({where: {id: accountId, userId: user.id}});
     if (!account) return {ok: false, error: "Account not found"};
 
-    const result = await commitImport(user.id, account, rows);
+    const result = await commitImport(user.id, account, rows,
+        balances.map((b) => ({date: new Date(b.date), balance: b.balance})));
     // Remember the columns so the next file from this bank needs no adjusting
     if (mapping) {
         await prisma.account.update({where: {id: account.id}, data: {importSettings: mapping}});

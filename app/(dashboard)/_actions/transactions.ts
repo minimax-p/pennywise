@@ -13,7 +13,6 @@ import {
 import {currentUser} from "@/lib/auth";
 import {redirect} from "next/navigation";
 import prisma from "@/lib/prisma";
-import {applyHistoryChanges} from "@/lib/history";
 import {assertOwnAccounts, getTransferCategory} from "@/lib/accounts";
 import {payeeKey} from "@/lib/payee";
 
@@ -42,29 +41,27 @@ export async function CreateTransaction(form: CreateTransactionSchemaType) {
         redirect("/login");
     }
 
-    const {amount, category, date, description, type, accountId} = parsedBody.data;
+    const {amount, category, categoryType, date, description, type, accountId, note} = parsedBody.data;
     await assertOwnAccounts(user.id, [accountId]);
 
-    const categoryRow = await findCategory(user.id, category, type);
+    const categoryRow = await findCategory(user.id, category, categoryType ?? type);
     if (!categoryRow) {
         throw new Error("Category not found");
     }
 
-    await prisma.$transaction(async (tx) => {
-        await tx.transaction.create({
-            data:{
-                userId: user.id,
-                amount,
-                description: description || "",
-                date,
-                type,
-                categoryId: categoryRow.id,
-                accountId: accountId || null,
-                payeeKey: description ? payeeKey(description) : null,
-                categorizedBy: "you",
-            }
-        });
-        await applyHistoryChanges(tx, user.id, [{date, type, amount}]);
+    await prisma.transaction.create({
+        data: {
+            userId: user.id,
+            amount,
+            description: description || "",
+            date,
+            type,
+            categoryId: categoryRow.id,
+            accountId: accountId || null,
+            payeeKey: description ? payeeKey(description) : null,
+            categorizedBy: "you",
+            note,
+        }
     });
 }
 
@@ -79,7 +76,7 @@ export async function CreateTransfer(form: CreateTransferSchemaType) {
         redirect("/login");
     }
 
-    const {amount, date, description, fromAccountId, toAccountId} = parsedBody.data;
+    const {amount, date, description, fromAccountId, toAccountId, note} = parsedBody.data;
     await assertOwnAccounts(user.id, [fromAccountId, toAccountId]);
     const category = await getTransferCategory();
 
@@ -93,6 +90,7 @@ export async function CreateTransfer(form: CreateTransferSchemaType) {
             categoryId: category.id,
             accountId: fromAccountId,
             toAccountId,
+            note,
         }
     });
 }
@@ -115,43 +113,41 @@ export async function EditTransaction(form: EditTransactionSchemaType) {
         redirect("/login");
     }
 
-    const {id, type, amount, category, date, description, accountId, toAccountId} = parsedBody.data;
+    const {id, type, amount, category, categoryType, date, description, accountId, toAccountId, note} = parsedBody.data;
 
     const existing = await prisma.transaction.findFirst({where: {id, userId: user.id}});
     if (!existing) {
         throw new Error("Transaction not found");
     }
+    if (existing.type === "adjustment") {
+        throw new Error("Balance adjustments can only be deleted");
+    }
     await assertOwnAccounts(user.id, [accountId, toAccountId]);
 
     const categoryRow = type === "transfer"
         ? await getTransferCategory()
-        : await findCategory(user.id, category!, type);
+        : await findCategory(user.id, category!, categoryType ?? type);
     if (!categoryRow) {
         throw new Error("Category not found");
     }
 
-    await prisma.$transaction(async (tx) => {
-        await tx.transaction.update({
-            where: {id},
-            data: {
-                type,
-                amount,
-                date,
-                description: description || "",
-                categoryId: categoryRow.id,
-                accountId: accountId || null,
-                toAccountId: type === "transfer" ? toAccountId : null,
-                payeeKey: type === "transfer" ? null : editedPayeeKey(existing, description),
-                // Saving the edit counts as sorting it yourself
-                categorizedBy: type === "transfer" ? null : "you",
-                needsReview: false,
-                categoryConfidence: null,
-            }
-        });
-        await applyHistoryChanges(tx, user.id, [
-            {date: existing.date, type: existing.type, amount: -existing.amount},
-            {date, type, amount},
-        ]);
+    await prisma.transaction.update({
+        where: {id},
+        data: {
+            type,
+            amount,
+            date,
+            description: description || "",
+            categoryId: categoryRow.id,
+            accountId: accountId || null,
+            toAccountId: type === "transfer" ? toAccountId : null,
+            payeeKey: type === "transfer" ? null : editedPayeeKey(existing, description),
+            // Saving the edit counts as sorting it yourself
+            categorizedBy: type === "transfer" ? null : "you",
+            needsReview: false,
+            categoryConfidence: null,
+            note,
+        }
     });
 }
 
@@ -170,10 +166,5 @@ export async function DeleteTransaction(form: DeleteTransactionSchemaType) {
         throw new Error("Transaction not found");
     }
 
-    await prisma.$transaction(async (tx) => {
-        await tx.transaction.delete({where: {id: existing.id}});
-        await applyHistoryChanges(tx, user.id, [
-            {date: existing.date, type: existing.type, amount: -existing.amount},
-        ]);
-    });
+    await prisma.transaction.delete({where: {id: existing.id}});
 }

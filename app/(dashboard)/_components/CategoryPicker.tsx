@@ -1,79 +1,84 @@
 "use client";
 
-import React, {useCallback, useEffect} from 'react';
-import {TransactionType} from "@/lib/types";
+import React, {useState} from 'react';
 import {useQuery} from "@tanstack/react-query";
 import {Category} from "@prisma/client";
+import {Check, ChevronsUpDown} from "lucide-react";
 import {Popover, PopoverContent, PopoverTrigger} from "@/components/ui/popover";
 import {Button} from "@/components/ui/button";
 import {Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList} from "@/components/ui/command";
 import CreateCategoryDialog from "@/app/(dashboard)/_components/CreateCategoryDialog";
-import {Check, ChevronsUpDown} from "lucide-react";
+import {TransactionType} from "@/lib/types";
 import {cn} from "@/lib/utils";
 
-interface Props{
-    type: TransactionType;
-    onChange: (value:string) => void;
-    defaultValue?: string;
+export type PickedCategory = { name: string, type: TransactionType };
+
+export function useAllCategories() {
+    return useQuery<Category[]>({
+        queryKey: ['categories', 'all'],
+        queryFn: () => fetch('/api/categories').then((res) => res.json()),
+    });
 }
 
-function CategoryPicker({type, onChange, defaultValue}: Props) {
-    const [open, setOpen] = React.useState(false);
-    const [value, setValue] = React.useState(defaultValue ?? "");
+interface Props {
+    // Which way the money went: money in can also be money back in a spending category
+    kind: TransactionType;
+    value: PickedCategory | null;
+    onChange: (value: PickedCategory) => void;
+}
 
-    useEffect(()=>{
-        if (!value) return;
-        onChange(value);
-    }, [onChange, value]);
-    const categoriesQuery = useQuery({
-        queryKey: ['categories', type],
-        queryFn: ()=>fetch(`/api/categories?type=${type}`).then(res=>res.json()),
-    });
+function CategoryPicker({kind, value, onChange}: Props) {
+    const [open, setOpen] = useState(false);
+    const categoriesQuery = useAllCategories();
+    const categories = Array.isArray(categoriesQuery.data) ? categoriesQuery.data : [];
+    const ofType = (type: TransactionType) => categories.filter((c) => c.type === type);
+    const selected = value && categories.find((c) => c.name === value.name && c.type === value.type);
 
-    const selectedCategory = categoriesQuery.data?.find((category: Category)=>category.name===value);
+    const groups: { heading: string, type: TransactionType }[] = kind === "expense"
+        ? [{heading: "Spending", type: "expense"}]
+        : [{heading: "Income", type: "income"}, {heading: "Money back (refund or payback)", type: "expense"}];
 
-    const successCallBack = useCallback((category: Category)=>{
-        setValue(category.name);
-        setOpen(prev=>!prev);
-    }, [setValue, setOpen]);
+    const pick = (category: { name: string, type: string }) => {
+        onChange({name: category.name, type: category.type as TransactionType});
+        setOpen(false);
+    };
 
     return (
         <Popover open={open} onOpenChange={setOpen} modal={true}>
             <PopoverTrigger asChild>
-                <Button variant={"outline"} role={"combobox"} aria-expanded={open} className="w-full justify-between">
-                    {selectedCategory? (<CategoryRow category={selectedCategory}/>) : "Select Category" }
+                <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-semibold">
+                    {selected ? (
+                        <span className="flex min-w-0 items-center gap-2">
+                            <span role="img" className="text-lg">{selected.icon}</span>
+                            <span className="truncate">{selected.name}</span>
+                            {kind === "income" && selected.type === "expense" && (
+                                <span className="rounded-full bg-spend-soft px-2 py-0.5 text-[11px] font-bold text-spend-ink">money back</span>
+                            )}
+                        </span>
+                    ) : <span className="text-muted-foreground">Pick a category</span>}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50"/>
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[300px] p-0 h-[350px]">
-                <Command className="rounded-lg border shadow-md h-full"
-                         onSubmit={e=>{
-                             e.preventDefault()}}
-                >
-                    <CommandInput placeholder="Search category..."></CommandInput>
-                    <CreateCategoryDialog type={type} successCallBack={successCallBack} />
-                    <CommandEmpty>
-                        <p>Category not found</p>
-                        <p className="text-xs text-muted-foreground">
-                            Tip: Create a new category
-                        </p>
-                    </CommandEmpty>
-                    <CommandGroup>
-                        <CommandList>
-                            {categoriesQuery.data && categoriesQuery.data.map((category: Category)=>
-                                (<CommandItem key={category.name}
-                                              onSelect={currentValue=>{
-                                                  setValue(category.name);
-                                                  setOpen(prev=>!prev)
-                                              }}>
-                                    <CategoryRow category={category} />
-                                    <Check className={cn(
-                                        "ml-2 mr-2 w-4 h-5 opacity-0",
-                                        value === category.name && 'opacity-100'
-                                    )}/>
-                                </CommandItem>))}
-                        </CommandList>
-                    </CommandGroup>
+            <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[280px] rounded-3xl border-2 p-0" align="start">
+                <Command className="rounded-3xl">
+                    <CommandInput placeholder="Search categories..."/>
+                    <CreateCategoryDialog type={kind} successCallBack={pick}/>
+                    <CommandList className="max-h-[320px]">
+                        <CommandEmpty>No category by that name. Create one above.</CommandEmpty>
+                        {groups.map((group) => (
+                            <CommandGroup key={group.heading} heading={group.heading}>
+                                {ofType(group.type).map((category) => (
+                                    <CommandItem key={category.id} value={`${category.name} ${group.type}`}
+                                                 onSelect={() => pick(category)} className="gap-2 rounded-xl py-2">
+                                        <span role="img" className="text-lg">{category.icon}</span>
+                                        <span className="flex-1">{category.name}</span>
+                                        <Check className={cn("h-4 w-4 text-primary opacity-0",
+                                            value?.name === category.name && value.type === group.type && "opacity-100")}/>
+                                    </CommandItem>
+                                ))}
+                            </CommandGroup>
+                        ))}
+                    </CommandList>
                 </Command>
             </PopoverContent>
         </Popover>
@@ -81,10 +86,3 @@ function CategoryPicker({type, onChange, defaultValue}: Props) {
 }
 
 export default CategoryPicker;
-
-function CategoryRow({category}:{category:Category}){
-    return <div className="flex items-center gap-2">
-        <span role="img">{category.icon}</span>
-        <span>{category.name}</span>
-    </div>
-}

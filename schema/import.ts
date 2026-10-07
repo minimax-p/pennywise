@@ -11,6 +11,7 @@ export const ColumnMappingSchema = z.object({
     direction: columnName.optional(),
     category: columnName.optional(),
     id: columnName.optional(),
+    balance: columnName.optional(),
     invertSign: z.boolean().optional(),
     preset: z.enum(["chase-checking", "chase-card", "discover", "capital-one-bank", "capital-one-card", "venmo"]).optional(),
 })
@@ -33,12 +34,20 @@ export const PlanRowSchema = z.object({
     transferAccountId: z.string().nullable(),
     linkTransactionId: z.string().nullable(),
     note: z.string().nullable(),
+    memo: z.string().max(500).nullish(),
+})
+
+export const StatementBalanceSchema = z.object({
+    date: z.string().datetime(),
+    balance: z.number(),
 })
 
 export const CommitImportSchema = z.object({
     accountId: z.string().min(1),
     rows: z.array(PlanRowSchema).max(5000),
     mapping: ColumnMappingSchema.nullable(),
+    // Balances the statement shows, saved as balance checks
+    balances: z.array(StatementBalanceSchema).max(5000).default([]),
 })
 
-export type CommitImportSchemaType = z.infer<typeof CommitImportSchema>;
+export type CommitImportSchemaType = z.input<typeof CommitImportSchema>;

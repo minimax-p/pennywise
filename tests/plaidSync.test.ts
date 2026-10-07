@@ -18,6 +18,7 @@ vi.mock("@/lib/plaid", async (importOriginal) => ({
 }));
 
 import prisma from "@/lib/prisma";
+import {historyTotals} from "./reportHelpers";
 import {encryptSecret} from "@/lib/crypto";
 import {syncPlaidItem} from "@/lib/plaidSync";
 
@@ -51,12 +52,8 @@ describe.skipIf(!testDatabaseUrl)("syncPlaidItem", () => {
     }
 
     async function history() {
-        const days = await prisma.monthHistory.findMany({where: {userId}, orderBy: {day: "asc"}});
-        const months = await prisma.yearHistory.findMany({where: {userId}});
-        return {
-            days: days.map(({day, income, expense}) => ({day, income, expense})),
-            months: months.map(({month, income, expense}) => ({month, income, expense})),
-        };
+        const {days, months} = await historyTotals(userId);
+        return {days: days.map(({day, income, expense}) => ({day, income, expense})), months};
     }
 
     beforeEach(() => {
@@ -66,8 +63,6 @@ describe.skipIf(!testDatabaseUrl)("syncPlaidItem", () => {
     afterAll(async () => {
         await prisma.transaction.deleteMany({where: {userId}});
         await prisma.plaidItem.deleteMany({where: {userId}});
-        await prisma.monthHistory.deleteMany({where: {userId}});
-        await prisma.yearHistory.deleteMany({where: {userId}});
         await prisma.$disconnect();
     });
 
@@ -135,14 +130,6 @@ describe.skipIf(!testDatabaseUrl)("syncPlaidItem", () => {
         await prisma.transaction.update({where: {plaidTransactionId: groceries}, data: {description: "Weekly shop"}});
         // And the user deletes one, which the bank later modifies
         await prisma.transaction.delete({where: {plaidTransactionId: flight}});
-        await prisma.monthHistory.update({
-            where: {day_month_year_userId: {userId, day: 20, month: 8, year: 2026}},
-            data: {expense: {decrement: 200}},
-        });
-        await prisma.yearHistory.update({
-            where: {month_year_userId: {userId, month: 8, year: 2026}},
-            data: {expense: {decrement: 200}},
-        });
 
         transactionsSync.mockResolvedValueOnce(syncPage({
             modified: [
@@ -169,8 +156,6 @@ describe.skipIf(!testDatabaseUrl)("syncPlaidItem", () => {
             days: [
                 {day: 10, income: 0, expense: 15},
                 {day: 11, income: 0, expense: 45},
-                {day: 15, income: 0, expense: 0},
-                {day: 20, income: 0, expense: 0},
             ],
             months: [{month: 8, income: 0, expense: 60}],
         });
@@ -203,10 +188,7 @@ describe.skipIf(!testDatabaseUrl)("syncPlaidItem", () => {
         const results = await Promise.all([syncPlaidItem(item), syncPlaidItem(item)]);
         expect(results.map((r) => r.added).sort()).toEqual([0, 1]);
         expect(await prisma.transaction.count({where: {plaidItemId: item.id}})).toBe(1);
-        const july = await prisma.yearHistory.findUniqueOrThrow({
-            where: {month_year_userId: {userId, month: 6, year: 2026}},
-        });
-        expect(july.expense).toBe(25);
+        expect((await historyTotals(userId)).months).toContainEqual({month: 6, income: 0, expense: 25});
     });
 
     it("records Plaid errors on the item without moving the cursor", async () => {
