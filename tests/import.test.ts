@@ -1,7 +1,7 @@
 import {afterAll, beforeAll, describe, expect, it, vi} from "vitest";
 import {readFileSync} from "node:fs";
 
-// Statement import against a real MySQL database (TEST_DATABASE_URL); skipped otherwise.
+// Statement import against a real PostgreSQL database (TEST_DATABASE_URL); skipped otherwise.
 const {testDatabaseUrl, userId} = vi.hoisted(() => {
     const {randomUUID} = require("node:crypto");
     const url = process.env.TEST_DATABASE_URL;

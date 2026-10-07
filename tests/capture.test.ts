@@ -1,6 +1,6 @@
 import {afterAll, beforeAll, describe, expect, it, vi} from "vitest";
 
-// The Apple Pay capture endpoint against a real MySQL database (TEST_DATABASE_URL); skipped otherwise.
+// The Apple Pay capture endpoint against a real PostgreSQL database (TEST_DATABASE_URL); skipped otherwise.
 const {testDatabaseUrl, userId} = vi.hoisted(() => {
     const {randomUUID} = require("node:crypto");
     const url = process.env.TEST_DATABASE_URL;

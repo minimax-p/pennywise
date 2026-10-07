@@ -5,7 +5,23 @@ import {createInterface} from "node:readline";
 
 const MIN_LENGTH = 12;
 
-function readPassword() {
+// Asks on the terminal without showing what is typed. The prompt goes to stderr, so only
+// the hash is printed and it can be captured.
+function ask(prompt) {
+    return new Promise((resolve) => {
+        const rl = createInterface({input: process.stdin, output: process.stderr, terminal: true});
+        rl._writeToOutput = (text) => {
+            if (text.includes(prompt)) rl.output.write(text);
+        };
+        rl.question(prompt, (answer) => {
+            rl.close();
+            process.stderr.write("\n");
+            resolve(answer);
+        });
+    });
+}
+
+async function readPassword() {
     if (!process.stdin.isTTY) {
         return new Promise((resolve) => {
             let data = "";
@@ -13,18 +29,12 @@ function readPassword() {
             process.stdin.on("end", () => resolve(data.replace(/\r?\n$/, "")));
         });
     }
-    return new Promise((resolve) => {
-        const rl = createInterface({input: process.stdin, output: process.stdout, terminal: true});
-        // Hide what is typed
-        rl._writeToOutput = (text) => {
-            if (text.includes("Password")) rl.output.write(text);
-        };
-        rl.question("Password: ", (answer) => {
-            rl.close();
-            process.stdout.write("\n");
-            resolve(answer);
-        });
-    });
+    const password = await ask("Password: ");
+    if (await ask("Same password again: ") !== password) {
+        console.error("The two passwords don't match.");
+        process.exit(1);
+    }
+    return password;
 }
 
 const password = await readPassword();

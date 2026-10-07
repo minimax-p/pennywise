@@ -1,6 +1,6 @@
 import {afterAll, beforeEach, describe, expect, it, vi} from "vitest";
 
-// Account balances and transfers against a real MySQL database (TEST_DATABASE_URL); skipped otherwise.
+// Account balances and transfers against a real PostgreSQL database (TEST_DATABASE_URL); skipped otherwise.
 const {testDatabaseUrl, userId, otherUserId} = vi.hoisted(() => {
     const {randomUUID} = require("node:crypto");
     const url = process.env.TEST_DATABASE_URL;

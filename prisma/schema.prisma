@@ -1,11 +1,11 @@
 generator client {
   provider      = "prisma-client-js"
-  // The Docker image runs on Debian bookworm
+  // Built on your computer and run on an Ubuntu 22.04+ server (OpenSSL 3)
   binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -74,7 +74,10 @@ model Transaction {
   aiSuggestions      Json?
   importedRows       ImportedRow[]
 
-  @@index([categoryId], map: "Transaction_categoryId_fkey")
+  @@index([categoryId])
+  @@index([accountId])
+  @@index([toAccountId])
+  @@index([plaidItemId])
   @@index([userId, date])
   @@index([userId, payeeKey])
   @@index([userId, needsReview])
@@ -139,6 +142,7 @@ model ImportedRow {
   createdAt     DateTime     @default(now())
 
   @@unique([accountId, fingerprint])
+  @@index([transactionId])
 }
 
 // Device keys for the Apple Pay shortcut. Only a SHA-256 hash is stored.

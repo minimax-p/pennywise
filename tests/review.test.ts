@@ -1,6 +1,6 @@
 import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi} from "vitest";
 
-// Sorting and AI suggestions against a real MySQL database (TEST_DATABASE_URL), with a fake Jev server.
+// Sorting and AI suggestions against a real PostgreSQL database (TEST_DATABASE_URL), with a fake Jev server.
 const {testDatabaseUrl, userId} = vi.hoisted(() => {
     const {randomUUID} = require("node:crypto");
     const url = process.env.TEST_DATABASE_URL;
