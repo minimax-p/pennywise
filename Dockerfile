@@ -8,6 +8,9 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 
 FROM base AS builder
+# The type check during the build needs more memory than Node allows by default,
+# which ran out on the 1 GB server. It can use swap for the rest.
+ENV NODE_OPTIONS=--max-old-space-size=1536
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 RUN npm ci
