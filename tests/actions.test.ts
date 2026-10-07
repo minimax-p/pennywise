@@ -80,7 +80,7 @@ describe.skipIf(!testDatabaseUrl)("server actions", () => {
             });
 
             await EditTransaction({
-                id: created.id, amount: 35, category: "Restaurants",
+                id: created.id, type: "expense", amount: 35, category: "Restaurants",
                 date: new Date("2026-10-02T00:00:00Z"), description: "Dinner",
             });
             expect(await prisma.transaction.findUniqueOrThrow({where: {id: created.id}, include: {category: true}}))
@@ -107,7 +107,7 @@ describe.skipIf(!testDatabaseUrl)("server actions", () => {
                 data: {userId: otherUserId, amount: 5, description: "", date: new Date(), type: "expense", categoryId: category.id},
             });
             await expect(DeleteTransaction({id: theirs.id})).rejects.toThrow("Transaction not found");
-            await expect(EditTransaction({id: theirs.id, amount: 1, category: "Groceries", date: new Date()}))
+            await expect(EditTransaction({id: theirs.id, type: "expense", amount: 1, category: "Groceries", date: new Date()}))
                 .rejects.toThrow("Transaction not found");
             expect(await prisma.transaction.findUnique({where: {id: theirs.id}})).not.toBeNull();
         });

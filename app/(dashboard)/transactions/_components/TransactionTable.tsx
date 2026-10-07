@@ -14,13 +14,23 @@ import {cn} from "@/lib/utils";
 import type {GetTransactionsHistoryResponseType} from "@/app/api/transactions/route";
 import EditTransactionDialog from "@/app/(dashboard)/transactions/_components/EditTransactionDialog";
 import DeleteTransactionDialog from "@/app/(dashboard)/transactions/_components/DeleteTransactionDialog";
+import {useAccounts} from "@/app/(dashboard)/_components/AccountPicker";
 
 interface Props {
     from: Date;
     to: Date;
 }
 
-type TypeFilter = 'all' | 'income' | 'expense';
+type TypeFilter = 'all' | 'income' | 'expense' | 'transfer';
+
+const ALL = '__all';
+const NO_ACCOUNT = '__none';
+
+const SOURCE_LABELS: Record<string, string> = {
+    manual: 'Manual',
+    import: 'Imported',
+    apple_pay: 'Apple Pay',
+};
 
 // Dates are stored with the local calendar day in their UTC fields
 const dateFormatter = new Intl.DateTimeFormat('default', {timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric'});
@@ -28,6 +38,9 @@ const dateFormatter = new Intl.DateTimeFormat('default', {timeZone: 'UTC', year:
 function TransactionTable({from, to}: Props) {
     const [search, setSearch] = useState('');
     const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+    const [accountFilter, setAccountFilter] = useState<string>(ALL);
+    const accountsQuery = useAccounts();
+    const accounts = Array.isArray(accountsQuery.data) ? accountsQuery.data : [];
 
     const historyQuery = useQuery<GetTransactionsHistoryResponseType>({
         queryKey: ['transactions', 'history', from, to],
@@ -38,9 +51,11 @@ function TransactionTable({from, to}: Props) {
         const term = search.trim().toLowerCase();
         return (historyQuery.data ?? []).filter((t) =>
             (typeFilter === 'all' || t.type === typeFilter) &&
+            (accountFilter === ALL
+                || (accountFilter === NO_ACCOUNT ? !t.accountId : t.accountId === accountFilter || t.toAccountId === accountFilter)) &&
             (!term || t.description.toLowerCase().includes(term) || t.category.name.toLowerCase().includes(term))
         );
-    }, [historyQuery.data, search, typeFilter]);
+    }, [historyQuery.data, search, typeFilter, accountFilter]);
 
     return (
         <div className="flex flex-col gap-4">
@@ -58,8 +73,21 @@ function TransactionTable({from, to}: Props) {
                         <SelectItem value="all">All types</SelectItem>
                         <SelectItem value="income">Income</SelectItem>
                         <SelectItem value="expense">Expense</SelectItem>
+                        <SelectItem value="transfer">Transfer</SelectItem>
                     </SelectContent>
                 </Select>
+                {accounts.length > 0 && (
+                    <Select value={accountFilter} onValueChange={setAccountFilter}>
+                        <SelectTrigger className="w-[180px]" aria-label="Account">
+                            <SelectValue/>
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={ALL}>All accounts</SelectItem>
+                            {accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                            <SelectItem value={NO_ACCOUNT}>No account</SelectItem>
+                        </SelectContent>
+                    </Select>
+                )}
             </div>
             <SkeletonWrapper isLoading={historyQuery.isLoading}>
                 <div className="rounded-md border">
@@ -69,6 +97,7 @@ function TransactionTable({from, to}: Props) {
                                 <TableHead>Date</TableHead>
                                 <TableHead>Category</TableHead>
                                 <TableHead>Description</TableHead>
+                                <TableHead>Account</TableHead>
                                 <TableHead>Type</TableHead>
                                 <TableHead className="text-right">Amount</TableHead>
                                 <TableHead>Source</TableHead>
@@ -78,7 +107,7 @@ function TransactionTable({from, to}: Props) {
                         <TableBody>
                             {rows.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                                         {historyQuery.data?.length ? 'No transactions match your filters' : 'No transactions in this period'}
                                     </TableCell>
                                 </TableRow>
@@ -93,17 +122,26 @@ function TransactionTable({from, to}: Props) {
                                         {transaction.category.name}
                                     </TableCell>
                                     <TableCell className="max-w-[240px] truncate">{transaction.description}</TableCell>
+                                    <TableCell className="whitespace-nowrap text-sm">
+                                        {transaction.type === 'transfer'
+                                            ? `${transaction.accountName ?? '?'} → ${transaction.toAccountName ?? '?'}`
+                                            : transaction.accountName ?? <span className="text-muted-foreground">-</span>}
+                                    </TableCell>
                                     <TableCell>
                                         <span className={cn(
                                             "rounded-lg px-2 py-1 text-xs capitalize",
-                                            transaction.type === 'income' ? "bg-sky-400/10 text-sky-500" : "bg-amber-400/10 text-amber-500"
+                                            transaction.type === 'income' && "bg-sky-400/10 text-sky-500",
+                                            transaction.type === 'expense' && "bg-amber-400/10 text-amber-500",
+                                            transaction.type === 'transfer' && "bg-violet-400/10 text-violet-400",
                                         )}>
                                             {transaction.type}
                                         </span>
                                     </TableCell>
                                     <TableCell className={cn(
                                         "whitespace-nowrap text-right font-mono",
-                                        transaction.type === 'income' ? "text-sky-500" : "text-amber-500"
+                                        transaction.type === 'income' && "text-sky-500",
+                                        transaction.type === 'expense' && "text-amber-500",
+                                        transaction.type === 'transfer' && "text-muted-foreground",
                                     )}>
                                         {transaction.type === 'expense' ? '-' : ''}{transaction.formattedAmount}
                                     </TableCell>
@@ -114,7 +152,9 @@ function TransactionTable({from, to}: Props) {
                                                 {transaction.source}
                                             </Badge>
                                         ) : (
-                                            <span className="text-sm text-muted-foreground">Manual</span>
+                                            <span className="whitespace-nowrap text-sm text-muted-foreground">
+                                                {SOURCE_LABELS[transaction.entrySource] ?? 'Manual'}
+                                            </span>
                                         )}
                                     </TableCell>
                                     <TableCell>

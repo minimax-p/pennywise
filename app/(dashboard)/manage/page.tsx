@@ -11,13 +11,20 @@ import CreateCategoryDialog from "@/app/(dashboard)/_components/CreateCategoryDi
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
-import { Category } from "@prisma/client";
+import { Category, UserSettings } from "@prisma/client";
 import DeleteCategoryDialog from "@/app/(dashboard)/_components/DeleteCategoryDialog";
 import EditCategoryDialog from "@/app/(dashboard)/_components/EditCategoryDialog";
 import LinkedAccounts from "@/app/(dashboard)/_components/LinkedAccounts";
+import AccountsManager from "@/app/(dashboard)/_components/AccountsManager";
 
 
 function Page() {
+    const userSettingsQuery = useQuery<UserSettings>({
+        queryKey: ["userSettings"],
+        queryFn: () => fetch("/api/user-settings").then((res) => res.json()),
+    });
+    const currency = userSettingsQuery.data?.currency ?? "USD";
+
     return (
         <>
             <div className='border-b bg-card'>
@@ -31,13 +38,14 @@ function Page() {
             <div className='container flex flex-col gap-4 p-4'>
                 <Card>
                     <CardHeader>
-                        <CardTitle>Link Your Bank Accounts</CardTitle>
-                        <CardDescription>Connect your accounts securely with Plaid</CardDescription>
+                        <CardTitle>Accounts</CardTitle>
+                        <CardDescription>Your bank accounts and cards. Balances update as you add or import transactions.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <LinkedAccounts />
+                        <AccountsManager currency={currency} />
                     </CardContent>
                 </Card>
+                <LinkedAccounts />
                 <Card>
                     <CardHeader>
                         <CardTitle>Currency</CardTitle>

@@ -40,6 +40,8 @@ async function getTransactionsHistory(userId: string, from: Date, to: Date) {
         include: {
             category: {select: {name: true, icon: true}},
             plaidItem: {select: {institutionName: true}},
+            account: {select: {name: true}},
+            toAccount: {select: {name: true}},
         },
         orderBy: [{date: 'desc'}, {createdAt: 'desc'}],
     });
@@ -52,7 +54,14 @@ async function getTransactionsHistory(userId: string, from: Date, to: Date) {
         date: transaction.date,
         type: transaction.type,
         category: transaction.category,
-        // Name of the bank it was imported from, null for manual transactions
+        accountId: transaction.accountId,
+        accountName: transaction.account?.name ?? null,
+        // Transfers only
+        toAccountId: transaction.toAccountId,
+        toAccountName: transaction.toAccount?.name ?? null,
+        // manual, import, apple_pay or plaid
+        entrySource: transaction.source,
+        // Name of the bank it was imported from through Plaid, null otherwise
         source: transaction.plaidTransactionId
             ? transaction.plaidItem?.institutionName ?? 'Bank'
             : null,

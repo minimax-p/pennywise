@@ -8,6 +8,7 @@ import {AlertTriangle, Landmark, Loader2, Plus, RefreshCw, Unlink} from "lucide-
 import SkeletonWrapper from "@/components/SkeletonWrapper";
 import PlaidLink, {showSyncResults, TOAST_ID, useInvalidateAfterSync} from "@/components/PlaidLink";
 import {Button} from "@/components/ui/button";
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card";
 import {Badge} from "@/components/ui/badge";
 import {Checkbox} from "@/components/ui/checkbox";
 import {
@@ -18,7 +19,7 @@ import {
 import {SyncPlaidItems, UnlinkPlaidItem} from "@/app/(dashboard)/_actions/plaid";
 import type {GetPlaidItemsResponseType} from "@/app/api/plaid/items/route";
 
-type PlaidItemRow = GetPlaidItemsResponseType[number];
+type PlaidItemRow = GetPlaidItemsResponseType['items'][number];
 
 function useSyncMutation() {
     const invalidate = useInvalidateAfterSync();
@@ -38,38 +39,52 @@ function useSyncMutation() {
     });
 }
 
+// Renders nothing unless Plaid credentials are configured on the server
 function LinkedAccounts() {
     const itemsQuery = useQuery<GetPlaidItemsResponseType>({
         queryKey: ['plaid-items'],
         queryFn: () => fetch('/api/plaid/items').then((res) => res.json()),
     });
-    const syncAll = useSyncMutation();
-    const items = itemsQuery.data ?? [];
+    if (!itemsQuery.data?.enabled) return null;
 
     return (
-        <SkeletonWrapper isLoading={itemsQuery.isLoading}>
-            <div className="flex flex-col gap-4">
-                {items.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                        No bank accounts linked yet. Linked accounts import their transactions automatically when you sync.
-                    </p>
+        <Card>
+            <CardHeader>
+                <CardTitle>Link Your Bank Accounts</CardTitle>
+                <CardDescription>Connect your accounts securely with Plaid</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <LinkedAccountList items={itemsQuery.data.items}/>
+            </CardContent>
+        </Card>
+    );
+}
+
+function LinkedAccountList({items}: { items: PlaidItemRow[] }) {
+    const syncAll = useSyncMutation();
+
+    return (
+        <div className="flex flex-col gap-4">
+            {items.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                    No bank accounts linked yet. Linked accounts import their transactions automatically when you sync.
+                </p>
+            )}
+            {items.map((item) => <LinkedAccountRow key={item.id} item={item}/>)}
+            <div className="flex flex-wrap gap-2">
+                <PlaidLink className="gap-2 font-mono">
+                    <Plus className="h-4 w-4"/>
+                    Link a bank account
+                </PlaidLink>
+                {items.length > 1 && (
+                    <Button variant="outline" className="gap-2 font-mono" disabled={syncAll.isPending}
+                            onClick={() => syncAll.mutate(undefined)}>
+                        <RefreshCw className={syncAll.isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"}/>
+                        Sync all
+                    </Button>
                 )}
-                {items.map((item) => <LinkedAccountRow key={item.id} item={item}/>)}
-                <div className="flex flex-wrap gap-2">
-                    <PlaidLink className="gap-2 font-mono">
-                        <Plus className="h-4 w-4"/>
-                        Link a bank account
-                    </PlaidLink>
-                    {items.length > 1 && (
-                        <Button variant="outline" className="gap-2 font-mono" disabled={syncAll.isPending}
-                                onClick={() => syncAll.mutate(undefined)}>
-                            <RefreshCw className={syncAll.isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"}/>
-                            Sync all
-                        </Button>
-                    )}
-                </div>
             </div>
-        </SkeletonWrapper>
+        </div>
     );
 }
 

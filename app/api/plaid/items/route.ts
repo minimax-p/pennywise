@@ -8,11 +8,16 @@ export async function GET() {
         redirect('/login');
     }
 
-    const items = await getPlaidItems(user.id);
-    return Response.json(items);
+    // The Plaid section is only shown when Plaid credentials are configured
+    const enabled = Boolean(process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET);
+    const items = enabled ? await getPlaidItems(user.id) : [];
+    return Response.json({enabled, items});
 }
 
-export type GetPlaidItemsResponseType = Awaited<ReturnType<typeof getPlaidItems>>
+export type GetPlaidItemsResponseType = {
+    enabled: boolean,
+    items: Awaited<ReturnType<typeof getPlaidItems>>,
+}
 
 // Never select accessToken here, this goes to the browser
 async function getPlaidItems(userId: string) {

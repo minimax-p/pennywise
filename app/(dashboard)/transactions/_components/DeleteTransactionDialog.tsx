@@ -29,6 +29,7 @@ function DeleteTransactionDialog({trigger, transaction}: Props) {
                 queryClient.invalidateQueries({queryKey: ['transactions']}),
                 queryClient.invalidateQueries({queryKey: ['overview']}),
                 queryClient.invalidateQueries({queryKey: ['plaid-items']}),
+                queryClient.invalidateQueries({queryKey: ['accounts']}),
             ]);
         },
         onError: () => {

@@ -6,7 +6,9 @@ import {Button} from "@/components/ui/button";
 import CreateTransactionDialog from "@/app/(dashboard)/_components/CreateTransactionDialog";
 import Overview from "@/app/(dashboard)/_components/Overview";
 import History from "@/app/(dashboard)/_components/History";
-import {CirclePlus} from "lucide-react";
+import {ArrowRightLeft, CirclePlus} from "lucide-react";
+import AccountsSummary from "@/app/(dashboard)/_components/AccountsSummary";
+import CreateTransferDialog from "@/app/(dashboard)/_components/CreateTransferDialog";
 
 async function Page() {
     const user = await currentUser();
@@ -41,9 +43,14 @@ async function Page() {
                             <CirclePlus />
                             Expense
                         </Button>} type="expense"/>
+                        <CreateTransferDialog trigger={<Button variant={"outline"} className="bg-violet-300 text-black hover:bg-violet-600 hover:text-white font-mono">
+                            <ArrowRightLeft />
+                            Transfer
+                        </Button>}/>
                     </div>
                 </div>
             </div>
+            <AccountsSummary userSettings={userSettings} />
             <Overview userSettings={userSettings} />
             <History userSettings={userSettings} />
         </div>

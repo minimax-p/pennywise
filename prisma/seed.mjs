@@ -99,6 +99,9 @@ const categories = [
     {name: "Ride-Share Driving", icon: "🚗", type: "income", tag: "Income"},
     {name: "Streaming Income", icon: "🎮", type: "income", tag: "Income"},
 
+    // Money moved between your own accounts. Not counted as income or spending.
+    {name: "Transfer", icon: "🔁", type: "transfer", tag: null},
+
     // Fallback for transactions whose category was deleted or could not be matched
     {name: "Unsorted", icon: "❓", type: "expense", tag: null},
     {name: "Unsorted", icon: "❓", type: "income", tag: null},
