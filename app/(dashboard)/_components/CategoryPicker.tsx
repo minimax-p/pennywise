@@ -33,12 +33,23 @@ function CategoryPicker({kind, value, onChange, trigger}: Props) {
     const [open, setOpen] = useState(false);
     const categoriesQuery = useAllCategories();
     const categories = Array.isArray(categoriesQuery.data) ? categoriesQuery.data : [];
-    const ofType = (type: TransactionType) => categories.filter((c) => c.type === type);
     const selected = value && categories.find((c) => c.name === value.name && c.type === value.type);
+    // Hidden ones aren't offered, unless one is already picked
+    const offered = (type: TransactionType) => categories.filter((c) => c.type === type && c.name !== "Unsorted"
+        && (!c.hidden || (value?.name === c.name && value.type === c.type)));
 
-    const groups: { heading: string, type: TransactionType }[] = kind === "expense"
-        ? [{heading: "Spending", type: "expense"}]
-        : [{heading: "Income", type: "income"}, {heading: "Money back (refund or payback)", type: "expense"}];
+    // Spending by its groups; money in by its groups, then spending categories as money back
+    const byGroup = (type: TransactionType, prefix = "") => {
+        const groups = new Map<string, Category[]>();
+        for (const c of offered(type)) {
+            const heading = prefix + (c.group ?? (type === "income" ? "Income" : "Other"));
+            groups.set(heading, [...(groups.get(heading) ?? []), c]);
+        }
+        return [...groups.entries()].map(([heading, list]) => ({heading, type, list}));
+    };
+    const groups = kind === "expense"
+        ? byGroup("expense")
+        : [...byGroup("income"), {heading: "Money back (refund or payback)", type: "expense" as TransactionType, list: offered("expense")}];
 
     const pick = (category: { name: string, type: string }) => {
         onChange({name: category.name, type: category.type as TransactionType});
@@ -69,7 +80,7 @@ function CategoryPicker({kind, value, onChange, trigger}: Props) {
                         <CommandEmpty>No category by that name. Create one above.</CommandEmpty>
                         {groups.map((group) => (
                             <CommandGroup key={group.heading} heading={group.heading}>
-                                {ofType(group.type).map((category) => (
+                                {group.list.map((category) => (
                                     <CommandItem key={category.id} value={`${category.name} ${group.type}`}
                                                  onSelect={() => pick(category)} className="gap-2 rounded-xl py-2">
                                         <span role="img" className="text-lg">{category.icon}</span>

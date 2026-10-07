@@ -27,9 +27,7 @@ export async function GET(request: Request){
             ],
             ...(type && { type }), // include type in the filters if it's defined
         },
-        orderBy: {
-            name: 'asc'
-        }
+        orderBy: [{sortOrder: 'asc'}, {name: 'asc'}],
     });
 
     return Response.json(categories)

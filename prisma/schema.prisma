@@ -25,7 +25,13 @@ model Category {
   type        String        @default("income")
   id          String        @id @default(uuid())
   isUniversal Boolean       @default(false)
-  tag         String?
+  // Heading it's listed under, e.g. Food or Getting around
+  group       String?       @map("tag")
+  // Stable name for the built-in categories, so renaming one keeps rules and keywords working
+  key         String?       @unique
+  sortOrder   Int           @default(0)
+  // Hidden categories aren't offered any more; transactions already in them keep them
+  hidden      Boolean       @default(false)
   Transaction Transaction[]
   lines       TransactionLine[]
   rules       Rule[]

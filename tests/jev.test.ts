@@ -5,19 +5,19 @@ import {startFakeJev} from "./fakeJev";
 const context: JevContext = {
     categories: {
         expense: [
-            {name: "Coffee Shops", group: "Food & Dining"},
+            {name: "Coffee & snacks", group: "Food & Dining"},
             {name: "Groceries", group: "Food & Dining"},
             {name: "Gas", group: "Transportation"},
             {name: "Plants", group: null},
         ],
-        income: [{name: "Salary", group: "Income"}, {name: "Freelance", group: "Income"}],
+        income: [{name: "Paycheck", group: "Income"}, {name: "Freelance", group: "Income"}],
     },
-    pastChoices: {expense: [{merchant: "STARBUCKS", category: "Coffee Shops"}], income: []},
+    pastChoices: {expense: [{merchant: "STARBUCKS", category: "Coffee & snacks"}], income: []},
 };
 
 const coffee: JevRequest = {
     description: "SQ *BLUE BOTTLE COFFEE", amount: -6.75, date: new Date("2026-10-06T00:00:00Z"),
-    accountName: "Discover it", accountType: "credit", bankCategory: "Restaurants",
+    accountName: "Discover it", accountType: "credit", bankCategory: "Eating out",
 };
 
 describe("askJev", () => {
@@ -33,15 +33,15 @@ describe("askJev", () => {
     });
 
     it("asks a choice question over your categories and returns the top answers", async () => {
-        const fake = await startFakeJev((_, labels) => ({choice: "Coffee Shops", confidence: 0.91}));
+        const fake = await startFakeJev((_, labels) => ({choice: "Coffee & snacks", confidence: 0.91}));
         stop = fake.stop;
 
         const [answer] = await askJev([coffee], context);
         expect(answer).toEqual({
-            name: "Coffee Shops",
+            name: "Coffee & snacks",
             confidence: 0.91,
             alternatives: [
-                {name: "Coffee Shops", probability: 0.91},
+                {name: "Coffee & snacks", probability: 0.91},
                 {name: "Groceries", probability: 0.03},
                 {name: "Gas", probability: 0.03},
             ],
@@ -55,13 +55,13 @@ describe("askJev", () => {
         expect(body.state).toEqual({
             transaction: {
                 description: "SQ *BLUE BOTTLE COFFEE", amount: 6.75, direction: "money spent", date: "2026-10-06",
-                account: "Discover it (credit)", bank_category: "Restaurants",
+                account: "Discover it (credit)", bank_category: "Eating out",
             },
-            past_choices: [{merchant: "STARBUCKS", category: "Coffee Shops"}],
+            past_choices: [{merchant: "STARBUCKS", category: "Coffee & snacks"}],
         });
         expect(body.questions.category.type).toBe("choice");
         expect(body.questions.category.criteria).toEqual({
-            "Coffee Shops": "Food & Dining: Coffee Shops",
+            "Coffee & snacks": "Food & Dining: Coffee & snacks",
             "Groceries": "Food & Dining: Groceries",
             "Gas": "Transportation: Gas",
             "Plants": null,
@@ -73,7 +73,7 @@ describe("askJev", () => {
         stop = fake.stop;
         const [answer] = await askJev([{...coffee, description: "UPWORK PAYOUT", amount: 300}], context);
         expect(answer?.name).toBe("Freelance");
-        expect(Object.keys(fake.requests[0].body.questions.category.criteria)).toEqual(["Salary", "Freelance"]);
+        expect(Object.keys(fake.requests[0].body.questions.category.criteria)).toEqual(["Paycheck", "Freelance"]);
         expect(fake.requests[0].body.state.transaction.direction).toBe("money received");
     });
 

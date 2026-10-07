@@ -224,7 +224,7 @@ function TransactionSheet({open, onOpenChange, kind: initialKind = "expense", tr
         }
         let top: Shown[] = [...counts.values()].sort((a, b) => b.count - a.count).map((e) => e.category);
         if (top.length < TOP_CATEGORIES) {
-            const more = (categoryList ?? []).filter((c) => c.type === entryKind && c.name !== "Unsorted"
+            const more = (categoryList ?? []).filter((c) => c.type === entryKind && c.name !== "Unsorted" && !c.hidden
                 && !top.some((t) => t.name === c.name && t.type === c.type));
             top = [...top, ...more.map((c) => ({name: c.name, type: c.type, icon: c.icon}))];
         }

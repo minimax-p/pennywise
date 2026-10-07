@@ -111,8 +111,8 @@ describe.skipIf(!testDatabaseUrl)("syncPlaidItem", () => {
 
         const imported = await prisma.transaction.findMany({where: {userId}, include: {category: true}});
         const byPlaidId = new Map(imported.map((t) => [t.plaidTransactionId, t]));
-        expect(byPlaidId.get(restaurant)).toMatchObject({amount: 15, type: "expense", category: {name: "Restaurants"}});
-        expect(byPlaidId.get(salary)).toMatchObject({amount: 1000, type: "income", category: {name: "Salary"}});
+        expect(byPlaidId.get(restaurant)).toMatchObject({amount: 15, type: "expense", category: {name: "Eating out"}});
+        expect(byPlaidId.get(salary)).toMatchObject({amount: 1000, type: "income", category: {name: "Paycheck"}});
         expect(byPlaidId.get(groceries)).toMatchObject({category: {name: "Groceries"}});
         expect(byPlaidId.get(flight)).toMatchObject({category: {name: "Unsorted", type: "expense"}});
 

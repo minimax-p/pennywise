@@ -42,11 +42,11 @@ describe("merchant names", () => {
     });
 
     it("shows your own name for a line and keeps the bank's text", () => {
-        const line = {description: "WAL-MART #2131    MIDDLETOWN NY", merchant: null, source: "import"};
-        expect(merchantName(line)).toBe("Walmart");
+        const line = {description: "ACME DEPOT #2131    MIDDLETOWN NY", merchant: null, source: "import"};
+        expect(merchantName(line)).toBe("Acme Depot");
         expect(merchantName({...line, merchant: "Walmart Supercenter"})).toBe("Walmart Supercenter");
         expect(merchantName({...line, source: "manual", description: "walmart run"})).toBe("walmart run");
-        expect(nameFields(line, "Walmart")).toEqual({description: line.description, merchant: null});
+        expect(nameFields(line, "Acme Depot")).toEqual({description: line.description, merchant: null});
         expect(nameFields(line, "Groceries at Walmart")).toEqual({description: line.description, merchant: "Groceries at Walmart"});
         expect(nameFields({...line, source: "manual"}, "Costco")).toEqual({description: "Costco", merchant: null});
         expect(nameFields(null, " Costco ")).toEqual({description: "Costco", merchant: null});
@@ -106,32 +106,32 @@ describe.skipIf(!testDatabaseUrl)("sorting with rules", () => {
     const importLines = async (rows: StatementRow[]) => commitImport(userId, chase, await planImport(userId, chase, rows));
 
     it("files a merchant's card at once, learns it with Always, and undoes both", async () => {
-        await importLines([line("WAL-MART #2131    MIDDLETOWN NY", -40, 1), line("WAL-MART #2131    MIDDLETOWN NY", -25.5, 3), line("ODD SHOP", -9, 2)]);
+        await importLines([line("ACME DEPOT #2131    MIDDLETOWN NY", -40, 1), line("ACME DEPOT #2131    MIDDLETOWN NY", -25.5, 3), line("ODD SHOP", -9, 2)]);
         const queue = await getSortQueue(userId);
-        const walmart = queue.cards.find((c) => c.name === "Walmart")!;
+        const walmart = queue.cards.find((c) => c.name === "Acme Depot")!;
         expect(walmart).toMatchObject({ids: expect.any(Array), total: 65.5, type: "expense", canAlways: true});
         expect(walmart.ids).toHaveLength(2);
         expect(queue.cards).toHaveLength(2);
 
         const sorted = await SortGroup({ids: walmart.ids, category: "Groceries", always: true});
         if (!sorted.ok) throw new Error(sorted.error);
-        expect(sorted.data).toMatchObject({sorted: 2, rule: "Walmart"});
+        expect(sorted.data).toMatchObject({sorted: 2, rule: "Acme Depot"});
         expect((await getSortQueue(userId)).cards.map((c) => c.name)).toEqual(["Odd Shop"]);
 
         // The next Walmart line is filed by the rule
-        await importLines([line("WAL-MART #2131    MIDDLETOWN NY", -12, 6)]);
+        await importLines([line("ACME DEPOT #2131    MIDDLETOWN NY", -12, 6)]);
         const next = await prisma.transaction.findFirstOrThrow({where: {userId, amount: 12}, include: {category: true}});
         expect(next).toMatchObject({needsReview: false, categorizedBy: "rule", category: {name: "Groceries"}});
-        expect((await getAutoSorted(userId)).map((r) => [r.name, r.categorizedBy])).toEqual([["Walmart", "rule"]]);
+        expect((await getAutoSorted(userId)).map((r) => [r.name, r.categorizedBy])).toEqual([["Acme Depot", "rule"]]);
 
         // Always again on the same merchant changes the rule instead of adding one
-        const lines = await importLines([line("WAL-MART #2131    MIDDLETOWN NY", -7, 8)]);
+        const lines = await importLines([line("ACME DEPOT #2131    MIDDLETOWN NY", -7, 8)]);
         expect(lines.created).toBe(1);
         const seven = await prisma.transaction.findFirstOrThrow({where: {userId, amount: 7}});
         await prisma.transaction.update({where: {id: seven.id}, data: {needsReview: true}});
-        const again = await SortGroup({ids: [seven.id], category: "General", always: true});
-        expect(again).toMatchObject({ok: true, data: {rule: "Walmart"}});
-        expect(await prisma.rule.findMany({where: {userId}, include: {category: true}})).toMatchObject([{category: {name: "General"}}]);
+        const again = await SortGroup({ids: [seven.id], category: "Shopping", always: true});
+        expect(again).toMatchObject({ok: true, data: {rule: "Acme Depot"}});
+        expect(await prisma.rule.findMany({where: {userId}, include: {category: true}})).toMatchObject([{category: {name: "Shopping"}}]);
         await prisma.rule.updateMany({where: {userId}, data: {categoryId: next.categoryId}});
 
         // Undo puts the first two back on Sort and removes the rule
@@ -145,7 +145,7 @@ describe.skipIf(!testDatabaseUrl)("sorting with rules", () => {
         await prisma.userSettings.create({data: {userId, currency: "USD", selfNames: "Test User"}});
         const dinner = await SaveEntry({
             type: "expense", amount: 60, date: new Date(Date.UTC(2026, 9, 1)), description: "Dinner", accountId: chase.id, category: null,
-            lines: [{amount: 30, category: {name: "Restaurants", type: "expense"}}, {amount: 30, person: {name: "Alex Nguyen"}}],
+            lines: [{amount: 30, category: {name: "Eating out", type: "expense"}}, {amount: 30, person: {name: "Alex Nguyen"}}],
         });
         expect(dinner.ok).toBe(true);
         await importLines([line("Zelle payment from ALEX NGUYEN BACw7h2k", 30, 4)]);
@@ -168,18 +168,18 @@ describe.skipIf(!testDatabaseUrl)("sorting with rules", () => {
     });
 
     it("saves rules from Manage and files what they match", async () => {
-        await importLines([line("CRUNCHYROLL 415-503-9235 CA", -7.99, 2), line("CRUNCHYROLL 415-503-9235 CA", -7.99, 9)]);
+        await importLines([line("ZORBLAX MEDIA 415-503-9235 CA", -7.99, 2), line("ZORBLAX MEDIA 415-503-9235 CA", -7.99, 9)]);
         await prisma.transaction.updateMany({where: {userId, date: new Date(Date.UTC(2026, 9, 2))}, data: {needsReview: false, categorizedBy: "you"}});
 
-        const saved = await SaveRule({kind: "contains", pattern: "crunchy", direction: "expense",
-            category: {name: "Streaming Services", type: "expense"}, rename: "Crunchyroll"});
+        const saved = await SaveRule({kind: "contains", pattern: "zorblax", direction: "expense",
+            category: {name: "Subscriptions", type: "expense"}, rename: "Zorblax"});
         expect(saved).toEqual({ok: true, data: {applied: 1}});
-        const again = await SaveRule({kind: "contains", pattern: "crunchy", direction: "expense",
-            category: {name: "Streaming Services", type: "expense"}, rename: "Crunchyroll", applyToPast: true});
+        const again = await SaveRule({kind: "contains", pattern: "zorblax", direction: "expense",
+            category: {name: "Subscriptions", type: "expense"}, rename: "Zorblax", applyToPast: true});
         expect(again).toEqual({ok: true, data: {applied: 2}});
         const crunchyroll = await prisma.transaction.findMany({where: {userId}, include: {category: true}});
         expect(crunchyroll.map((t) => [t.merchant, t.category.name, t.needsReview])).toEqual([
-            ["Crunchyroll", "Streaming Services", false], ["Crunchyroll", "Streaming Services", false],
+            ["Zorblax", "Subscriptions", false], ["Zorblax", "Subscriptions", false],
         ]);
 
         expect(await SaveRule({kind: "contains", pattern: "", category: {name: "Groceries", type: "expense"}}))

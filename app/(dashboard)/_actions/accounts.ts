@@ -2,7 +2,7 @@
 
 import {ActionResult, requireUser} from "@/lib/actionResult";
 import prisma from "@/lib/prisma";
-import {findCategory} from "@/lib/entries";
+import {categoryByKey} from "@/lib/categoryKeys";
 import {Account} from "@prisma/client";
 import {
     CheckBalanceSchema,
@@ -120,8 +120,7 @@ export async function CheckBalance(form: CheckBalanceSchemaType): Promise<Action
     const adjustmentCategory = adjust && !spent && Math.abs(difference) >= CENT ? await getAdjustmentCategory() : null;
     await prisma.$transaction(async (tx) => {
         if (spent) {
-            const untracked = await findCategory(tx, user.id, "Untracked cash", "expense")
-                ?? await tx.category.create({data: {name: "Untracked cash", icon: "💵", type: "expense", isUniversal: true}});
+            const untracked = await categoryByKey("untracked-cash", tx);
             await tx.transaction.create({
                 data: {
                     userId: user.id,

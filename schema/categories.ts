@@ -1,25 +1,29 @@
 import z from "zod";
 
+const name = z.string().trim().min(1, "Type a name").max(40);
+const icon = z.string().trim().min(1, "Pick an emoji").max(20);
+const group = z.string().trim().max(40).nullish().transform((v) => v || null);
+
 export const CreateCategorySchema = z.object({
-    name: z.string().min(3).max(20),
-    icon: z.string().max(20),
-    type: z.enum(["income","expense"])
+    name,
+    icon,
+    type: z.enum(["income", "expense"]),
+    group,
 })
 
-export type CreateCategorySchemaType = z.infer<typeof CreateCategorySchema>;
+export type CreateCategorySchemaType = z.input<typeof CreateCategorySchema>;
 
-export const DeleteCategorySchema = z.object({
-    name: z.string().min(3).max(20),
-    type: z.enum(["income","expense"])
+export const UpdateCategorySchema = z.object({
+    id: z.string().min(1),
+    name,
+    icon,
+    group,
+    hidden: z.boolean(),
 })
 
-export type DeleteCategorySchemaType = z.infer<typeof DeleteCategorySchema>;
+export type UpdateCategorySchemaType = z.input<typeof UpdateCategorySchema>;
 
-export const EditCategorySchema = z.object({
-    oldName: z.string().min(3).max(20),
-    newName: z.string().min(3).max(20),
-    icon: z.string().max(20),
-    type: z.enum(["income","expense"])
+export const MergeCategorySchema = z.object({
+    fromId: z.string().min(1),
+    intoId: z.string().min(1),
 })
-
-export type EditCategorySchemaType = z.infer<typeof EditCategorySchema>;

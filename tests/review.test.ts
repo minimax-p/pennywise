@@ -67,7 +67,7 @@ describe.skipIf(!testDatabaseUrl)("sorting transactions", () => {
     });
 
     it("files confident AI answers and leaves unsure ones on the Sort page", async () => {
-        const fake = await useJev({"BLUE BOTTLE": ["Coffee Shops", 0.93], "MYSTERY": ["General", 0.35]});
+        const fake = await useJev({"BLUE BOTTLE": ["Coffee & snacks", 0.93], "MYSTERY": ["Shopping", 0.35]});
         const plan = await importRows([
             row("SQ *BLUE BOTTLE COFFEE #12 OAKLAND CA", -6.75, 5),
             row("SQ *BLUE BOTTLE COFFEE #12 OAKLAND CA", -4.25, 6),
@@ -75,31 +75,31 @@ describe.skipIf(!testDatabaseUrl)("sorting transactions", () => {
             row("DISCOVER CASHBACK BONUS", 12, 8),
         ]);
         expect(plan.map((p) => [p.category, p.suggestion?.source])).toEqual([
-            ["Coffee Shops", "ai"], ["Coffee Shops", "ai"], ["General", "ai"], ["Dividends & Interest", "keyword"],
+            ["Coffee & snacks", "ai"], ["Coffee & snacks", "ai"], ["Shopping", "ai"], ["Interest", "keyword"],
         ]);
         // One question per merchant, and none for lines a keyword already sorted
         expect(fake.requests).toHaveLength(2);
 
         expect(await byDescription("SQ *BLUE BOTTLE COFFEE #12 OAKLAND CA")).toMatchObject({
-            needsReview: false, categorizedBy: "ai", categoryConfidence: 0.93, category: {name: "Coffee Shops"},
+            needsReview: false, categorizedBy: "ai", categoryConfidence: 0.93, category: {name: "Coffee & snacks"},
         });
         const unsure = await byDescription("MYSTERY SHOP 991");
-        expect(unsure).toMatchObject({needsReview: true, categorizedBy: "ai", category: {name: "General"}});
-        expect((unsure.aiSuggestions as { name: string }[])[0].name).toBe("General");
+        expect(unsure).toMatchObject({needsReview: true, categorizedBy: "ai", category: {name: "Shopping"}});
+        expect((unsure.aiSuggestions as { name: string }[])[0].name).toBe("Shopping");
     });
 
     it("prefers your own past choice over asking Jev, and AI guesses don't teach", async () => {
-        const fake = await useJev({"BLUE BOTTLE": ["Restaurants", 0.95]});
+        const fake = await useJev({"BLUE BOTTLE": ["Eating out", 0.95]});
         await importRows([row("SQ *BLUE BOTTLE COFFEE #12", -5, 1)]);
         // Jev's guess was filed, but it is not your choice, so it is asked again next time
         await importRows([row("SQ *BLUE BOTTLE COFFEE #12", -5.5, 2)]);
         expect(fake.requests).toHaveLength(2);
 
         const first = await byDescription("SQ *BLUE BOTTLE COFFEE #12");
-        await SortTransaction({id: first.id, category: "Coffee Shops", applyToMerchant: false});
+        await SortTransaction({id: first.id, category: "Coffee & snacks", applyToMerchant: false});
 
         const [suggestion] = await suggestCategories(userId, [{...row("SQ *BLUE BOTTLE COFFEE #99", -7, 3)}]);
-        expect(suggestion).toMatchObject({name: "Coffee Shops", source: "history"});
+        expect(suggestion).toMatchObject({name: "Coffee & snacks", source: "history"});
         expect(fake.requests).toHaveLength(2);
     });
 
@@ -123,8 +123,8 @@ describe.skipIf(!testDatabaseUrl)("sorting transactions", () => {
     });
 
     it("keeps all suggestions at once, except lines with no category yet", async () => {
-        await useJev({"MAYBE CAFE": ["Coffee Shops", 0.5]});
-        await importRows([row("MAYBE CAFE", -3, 1)]);
+        await useJev({"MAYBE SPOT": ["Coffee & snacks", 0.5]});
+        await importRows([row("MAYBE SPOT", -3, 1)]);
         await jev!.stop();
         jev = null;
         // Without Jev this one stays Unsorted
@@ -133,18 +133,18 @@ describe.skipIf(!testDatabaseUrl)("sorting transactions", () => {
         expect(ids).toHaveLength(2);
 
         expect(await AcceptSuggestions({ids})).toEqual({ok: true, data: {accepted: 1}});
-        expect(await byDescription("MAYBE CAFE")).toMatchObject({needsReview: false, categorizedBy: "you"});
+        expect(await byDescription("MAYBE SPOT")).toMatchObject({needsReview: false, categorizedBy: "you"});
         expect(await byDescription("NOTHING KNOWN")).toMatchObject({needsReview: true, category: {name: "Unsorted"}});
     });
 
     it("asks Jev to sort what is waiting, once per transaction", async () => {
-        await importRows([row("PIZZA PLACE", -18, 1), row("ODD THING", -9, 2)]);
+        await importRows([row("LUIGI PLACE", -18, 1), row("ODD THING", -9, 2)]);
         expect(await AskAiToSort()).toEqual({ok: false, error: expect.stringContaining("TYPESAFE_API_KEY")});
 
-        const fake = await useJev({"PIZZA": ["Fast Food", 0.88], "ODD": ["General", 0.3]});
+        const fake = await useJev({"LUIGI": ["Eating out", 0.88], "ODD": ["Shopping", 0.3]});
         expect(await AskAiToSort()).toEqual({ok: true, data: {sorted: 1, suggested: 1, left: 1}});
-        expect(await byDescription("PIZZA PLACE")).toMatchObject({needsReview: false, category: {name: "Fast Food"}});
-        expect(await byDescription("ODD THING")).toMatchObject({needsReview: true, category: {name: "General"}});
+        expect(await byDescription("LUIGI PLACE")).toMatchObject({needsReview: false, category: {name: "Eating out"}});
+        expect(await byDescription("ODD THING")).toMatchObject({needsReview: true, category: {name: "Shopping"}});
 
         // The unsure one was already asked; asking again doesn't repeat the call
         const calls = fake.requests.length;

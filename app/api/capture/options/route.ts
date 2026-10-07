@@ -31,7 +31,7 @@ export async function GET(request: Request) {
             select: {description: true, source: true, accountId: true, categoryId: true},
         }),
         prisma.account.findMany({where: {userId, archived: false, type: {in: ["checking", "credit", "cash", "wallet"]}}}),
-        prisma.category.findMany({where: {type: "expense", OR: [{userId}, {isUniversal: true}], NOT: {name: "Unsorted"}}}),
+        prisma.category.findMany({where: {type: "expense", hidden: false, OR: [{userId}, {isUniversal: true}], NOT: {name: "Unsorted"}}}),
     ]);
 
     // Places you logged yourself have clean names; statement lines don't

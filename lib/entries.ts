@@ -4,6 +4,7 @@ import {CENT, roundMoney} from "@/lib/ledger";
 import {payeeKey} from "@/lib/payee";
 import {findOrCreatePerson} from "@/lib/people";
 import {nameFields} from "@/lib/merchant";
+import {categoryByKey} from "@/lib/categoryKeys";
 
 // Saving money spent or received ("entries"), with an optional person and an optional
 // split into your shares by category and other people's shares. Used by the Log sheet,
@@ -46,13 +47,8 @@ export async function findCategory(db: Db, userId: string, name: string, type: s
     return categories.find((c) => c.userId === userId) ?? categories[0];
 }
 
-async function builtIn(db: Db, name: string, type: string, icon: string) {
-    return await db.category.findFirst({where: {name, type, isUniversal: true}})
-        ?? db.category.create({data: {name, type, icon, isUniversal: true}});
-}
-
-export const getSplitCategory = (db: Db = prisma) => builtIn(db, "Split", "split", "✂️");
-export const getUnsortedCategory = (db: Db, type: string) => builtIn(db, "Unsorted", type, "❓");
+export const getSplitCategory = (db: Db = prisma) => categoryByKey("split", db);
+export const getUnsortedCategory = (db: Db, type: string) => categoryByKey(type === "income" ? "unsorted-income" : "unsorted-expense", db);
 
 async function resolveCategory(db: Db, userId: string, entryType: string, ref: CategoryRef) {
     // Spending can't go in an income category; money in can be money back in a spending one

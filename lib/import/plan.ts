@@ -8,6 +8,7 @@ import {CENT} from "@/lib/ledger";
 import {bankFromCode, isSelf, mentionsSelf, parseSelfNames, parseZelle} from "@/lib/import/zelle";
 import {findOrCreatePerson} from "@/lib/people";
 import {rebalanceLines} from "@/lib/entries";
+import {categoryByKey} from "@/lib/categoryKeys";
 
 // Decides what to do with each statement line before anything is saved:
 // - duplicate:  imported before (same line, or the same purchase from a CSV and a QFX file)
@@ -321,11 +322,8 @@ export type CommitResult = {
 export async function commitImport(userId: string, account: Account, rows: PlanRow[], balances: StatementBalance[] = []): Promise<CommitResult> {
     const result: CommitResult = {created: 0, linked: 0, skipped: 0, statement: null};
     const transferCategory = await getTransferCategory();
-    for (const type of ["income", "expense"]) {
-        if (!await prisma.category.findFirst({where: {name: "Unsorted", type, isUniversal: true}})) {
-            await prisma.category.create({data: {name: "Unsorted", icon: "❓", type, isUniversal: true}});
-        }
-    }
+    await categoryByKey("unsorted-expense");
+    await categoryByKey("unsorted-income");
     const categories = await prisma.category.findMany({
         where: {OR: [{userId}, {isUniversal: true}], type: {in: ["income", "expense"]}},
     });

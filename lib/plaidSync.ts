@@ -1,6 +1,7 @@
 import {Category, PlaidItem} from "@prisma/client";
 import {RemovedTransaction, Transaction as PlaidTransaction, TransactionsUpdateStatus} from "plaid";
 import prisma from "@/lib/prisma";
+import {categoryByKey} from "@/lib/categoryKeys";
 import {getPlaidError, plaidClient} from "@/lib/plaid";
 import {decryptSecret} from "@/lib/crypto";
 import {convertPlaidTransaction} from "@/lib/plaidTransactions";
@@ -53,22 +54,17 @@ async function fetchSyncUpdates(accessToken: string, startCursor: string | null)
     }
 }
 
-// Universal categories by "type:name", plus a guaranteed "Unsorted" fallback for each type
+// Built-in categories by key; money that doesn't fit the category's type, or has none, is Unsorted
 async function loadCategoryLookup() {
-    const categories = await prisma.category.findMany({where: {isUniversal: true}});
-    const byKey = new Map<string, Category>(categories.map((c) => [`${c.type}:${c.name}`, c]));
-
-    for (const type of ["income", "expense"] as TransactionType[]) {
-        if (!byKey.has(`${type}:Unsorted`)) {
-            const unsorted = await prisma.category.create({
-                data: {name: "Unsorted", icon: "❓", type, isUniversal: true},
-            });
-            byKey.set(`${type}:Unsorted`, unsorted);
-        }
-    }
-
-    return (type: TransactionType, name: string | null) =>
-        (name && byKey.get(`${type}:${name}`)) || byKey.get(`${type}:Unsorted`)!;
+    const categories = await prisma.category.findMany({where: {key: {not: null}}});
+    const unsorted = {
+        income: await categoryByKey("unsorted-income"),
+        expense: await categoryByKey("unsorted-expense"),
+    };
+    return (type: TransactionType, key: string | null): Category => {
+        const category = key ? categories.find((c) => c.key === key) : undefined;
+        return category && category.type === type ? category : unsorted[type];
+    };
 }
 
 export async function syncPlaidItem(item: PlaidItem): Promise<PlaidSyncResult> {
@@ -123,11 +119,11 @@ export async function syncPlaidItem(item: PlaidItem): Promise<PlaidSyncResult> {
             description: converted.description,
             date: converted.date,
             type: converted.type,
-            categoryId: categoryFor(converted.type, converted.categoryName).id,
+            categoryId: categoryFor(converted.type, converted.categoryKey).id,
             plaidTransactionId,
             plaidItemId: item.id,
-            categorizedBy: converted.categoryName ? "plaid" : null,
-            needsReview: !converted.categoryName,
+            categorizedBy: converted.categoryKey ? "plaid" : null,
+            needsReview: !converted.categoryKey,
         });
     }
 
@@ -151,7 +147,7 @@ export async function syncPlaidItem(item: PlaidItem): Promise<PlaidSyncResult> {
                 date: converted.date,
                 type: converted.type,
                 // A refund can flip the type, which needs a category of the new type
-                ...(converted.type !== current.type && {categoryId: categoryFor(converted.type, converted.categoryName).id}),
+                ...(converted.type !== current.type && {categoryId: categoryFor(converted.type, converted.categoryKey).id}),
             },
         });
     }

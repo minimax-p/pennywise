@@ -42,7 +42,7 @@ export async function getSortQueue(userId: string) {
     });
     const frequent = (type: string) => usage
         .map((u) => categories.find((c) => c.id === u.categoryId))
-        .filter((c): c is typeof categories[number] => Boolean(c && c.type === type && c.name !== "Unsorted"));
+        .filter((c): c is typeof categories[number] => Boolean(c && c.type === type && c.name !== "Unsorted" && !c.hidden));
 
     // A move between your own accounts that was filed as spending or income
     const transferHint = (t: typeof transactions[number]) => {

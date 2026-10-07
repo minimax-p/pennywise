@@ -70,7 +70,7 @@ describe.skipIf(!testDatabaseUrl)("people, splits and cash", () => {
         const result = await SaveEntry({
             type: "expense", amount: 90, date: day(2), description: "Olive Garden", accountId: discover.id, category: null,
             lines: [
-                {amount: 30, category: {name: "Restaurants", type: "expense"}},
+                {amount: 30, category: {name: "Eating out", type: "expense"}},
                 {amount: 30, person: {name: "Alex Nguyen"}},
                 {amount: 30, person: {name: "Mia Chen"}},
             ],
@@ -78,7 +78,7 @@ describe.skipIf(!testDatabaseUrl)("people, splits and cash", () => {
         expect(result.ok).toBe(true);
         expect(await getBalance(discover)).toBe(-90);
         expect(await october()).toEqual({spending: 30, income: 0});
-        expect((await getCategoryTotals(userId, day(1), day(31))).spending).toMatchObject([{name: "Restaurants", amount: 30}]);
+        expect((await getCategoryTotals(userId, day(1), day(31))).spending).toMatchObject([{name: "Eating out", amount: 30}]);
 
         const alex = await prisma.person.findFirstOrThrow({where: {userId, name: "Alex Nguyen"}});
         expect((await personBalances(userId)).get(alex.id)).toBe(30);
@@ -98,7 +98,7 @@ describe.skipIf(!testDatabaseUrl)("people, splits and cash", () => {
         const base = {type: "expense" as const, amount: 50, date: day(3), description: "Target", accountId: discover.id, category: null};
         expect(await SaveEntry({...base, lines: [{amount: 20, category: {name: "Groceries", type: "expense"}}, {amount: 20, person: {name: "Sam"}}]}))
             .toEqual({ok: false, error: "The parts add up to 40.00, not 50.00"});
-        expect(await SaveEntry({...base, lines: [{amount: 50, category: {name: "Salary", type: "income"}}]}))
+        expect(await SaveEntry({...base, lines: [{amount: 50, category: {name: "Paycheck", type: "income"}}]}))
             .toEqual({ok: false, error: "Pick a spending category"});
         expect(await SaveEntry({...base, lines: [{amount: 50, category: {name: "Groceries", type: "expense"}, person: {name: "Sam"}}]}))
             .toEqual({ok: false, error: "Each part of a split is a category or a person"});
@@ -117,7 +117,7 @@ describe.skipIf(!testDatabaseUrl)("people, splits and cash", () => {
     it("keeps a logged split when the statement shows a tip", async () => {
         const logged = await SaveEntry({
             type: "expense", amount: 80, date: day(5), description: "Thai Palace", accountId: discover.id, category: null,
-            lines: [{amount: 40, category: {name: "Restaurants", type: "expense"}}, {amount: 40, person: {name: "Sam Friend"}}],
+            lines: [{amount: 40, category: {name: "Eating out", type: "expense"}}, {amount: 40, person: {name: "Sam Friend"}}],
         });
         if (!logged.ok) throw new Error(logged.error);
         const plan = await planImport(userId, discover, [line("THAI PALACE NEW YORK NY", -88, 6)]);

@@ -69,8 +69,9 @@ describe.skipIf(!testDatabaseUrl)("statement import", () => {
     it("imports a Chase statement: income, spending and a card payment as a transfer", async () => {
         const plan = await planImport(userId, chase, statement("chase-checking.csv", chase));
 
-        expect(byDescription(plan, "STARBUCKS")).toMatchObject({status: "new", kind: "expense", category: "Unsorted"});
-        expect(byDescription(plan, "PAYROLL")).toMatchObject({status: "new", kind: "income", category: "Salary"});
+        // A well-known chain is recognized by its name
+        expect(byDescription(plan, "STARBUCKS")).toMatchObject({status: "new", kind: "expense", category: "Coffee & snacks"});
+        expect(byDescription(plan, "PAYROLL")).toMatchObject({status: "new", kind: "income", category: "Paycheck"});
         expect(byDescription(plan, "DISCOVER E-PAYMENT")).toMatchObject({status: "new", kind: "transfer", transferAccountId: discover.id});
         // Paying someone through Venmo from checking is spending, not a transfer to the Venmo balance
         expect(byDescription(plan, "VENMO PAYMENT")).toMatchObject({status: "new", kind: "expense"});
@@ -82,7 +83,7 @@ describe.skipIf(!testDatabaseUrl)("statement import", () => {
     });
 
     it("links the Discover side of the payment and fills in an Apple Pay purchase's final amount", async () => {
-        const unsorted = await prisma.category.findFirstOrThrow({where: {name: "Restaurants", type: "expense", isUniversal: true}});
+        const unsorted = await prisma.category.findFirstOrThrow({where: {name: "Eating out", type: "expense", isUniversal: true}});
         const applePay = await prisma.transaction.create({
             data: {
                 userId, amount: 5.5, description: "Blue Bottle Coffee", date: new Date("2026-10-06T08:15:00Z"),
@@ -120,7 +121,7 @@ describe.skipIf(!testDatabaseUrl)("statement import", () => {
     it("records savings deposits from checking as transfers and interest as income", async () => {
         const plan = await planImport(userId, savings, statement("capital-one-360.csv", savings));
         expect(byDescription(plan, "Deposit from JPMORGAN CHASE")).toMatchObject({status: "new", kind: "transfer", transferAccountId: chase.id});
-        expect(byDescription(plan, "Interest")).toMatchObject({kind: "income", category: "Dividends & Interest"});
+        expect(byDescription(plan, "Interest")).toMatchObject({kind: "income", category: "Interest"});
         await commitImport(userId, savings, plan);
 
         expect(await getBalance(savings)).toBe(10000 + 500 + 12.34);
@@ -128,7 +129,7 @@ describe.skipIf(!testDatabaseUrl)("statement import", () => {
     });
 
     it("turns a matching expense in another account into a transfer", async () => {
-        const general = await prisma.category.findFirstOrThrow({where: {name: "General", type: "expense", isUniversal: true}});
+        const general = await prisma.category.findFirstOrThrow({where: {name: "Shopping", type: "expense", isUniversal: true}});
         const expense = await prisma.transaction.create({
             data: {
                 userId, amount: 200, description: "CAPITAL ONE ONLINE TRANSFER", date: new Date("2026-10-10T00:00:00Z"),
@@ -149,15 +150,16 @@ describe.skipIf(!testDatabaseUrl)("statement import", () => {
 
     it("learns categories from your edits", async () => {
         const starbucks = await prisma.transaction.findFirstOrThrow({where: {userId, description: {contains: "STARBUCKS"}}});
+        // Your choice wins over the keyword
         await EditTransaction({
-            id: starbucks.id, type: "expense", amount: 4.5, date: starbucks.date, category: "Coffee Shops",
+            id: starbucks.id, type: "expense", amount: 4.5, date: starbucks.date, category: "Eating out",
             accountId: chase.id, description: "Morning coffee",
         });
         const [row] = await planImport(userId, chase, [{
             date: new Date("2026-10-20T00:00:00Z"), amount: -5.25, description: "STARBUCKS STORE 678 BELLEVUE WA",
             externalId: null, bankCategory: null, skipReason: null,
         }]);
-        expect(row).toMatchObject({status: "new", category: "Coffee Shops"});
+        expect(row).toMatchObject({status: "new", category: "Eating out"});
     });
 
     it("imports Venmo, leaving out payments funded from a bank card", async () => {
