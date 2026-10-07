@@ -16,6 +16,7 @@ import DeleteCategoryDialog from "@/app/(dashboard)/_components/DeleteCategoryDi
 import EditCategoryDialog from "@/app/(dashboard)/_components/EditCategoryDialog";
 import LinkedAccounts from "@/app/(dashboard)/_components/LinkedAccounts";
 import AccountsManager from "@/app/(dashboard)/_components/AccountsManager";
+import ApplePayShortcut from "@/app/(dashboard)/_components/ApplePayShortcut";
 
 
 function Page() {
@@ -43,6 +44,15 @@ function Page() {
                     </CardHeader>
                     <CardContent>
                         <AccountsManager currency={currency} />
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Apple Pay shortcut</CardTitle>
+                        <CardDescription>Log Apple Pay purchases automatically as you pay</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ApplePayShortcut />
                     </CardContent>
                 </Card>
                 <LinkedAccounts />
