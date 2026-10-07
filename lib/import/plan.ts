@@ -2,7 +2,7 @@ import {Account, Prisma} from "@prisma/client";
 import prisma from "@/lib/prisma";
 import {payeeKey, payeesSimilar} from "@/lib/payee";
 import {fingerprintRows, StatementRow} from "@/lib/import/parse";
-import {suggestCategoryName} from "@/lib/import/categories";
+import {categorizationFields, CategorySuggestion, suggestCategories} from "@/lib/categorize/suggest";
 import {getTransferCategory} from "@/lib/accounts";
 import {applyHistoryChanges} from "@/lib/history";
 
@@ -26,6 +26,8 @@ export type PlanRow = {
     // What a new row becomes
     kind: "income" | "expense" | "transfer";
     category: string | null;
+    // Where the suggested category came from; a different category means you picked it
+    suggestion: CategorySuggestion | null;
     // For transfers, the user's other account
     transferAccountId: string | null;
     // For match, transfer and pair: the existing transaction it is joined to
@@ -93,18 +95,18 @@ export async function planImport(userId: string, account: Account, rows: Stateme
     }) : [];
     const reconciledHere = (t: typeof nearby[number]) => t.importedRows.some((r) => r.accountId === account.id);
 
-    const suggestions = await suggestCategoryName(userId, rows);
     const used = new Set<string>();
     const claim = (id: string) => used.add(id);
 
-    return rows.map((row, i): PlanRow => {
+    const plan = rows.map((row, i): PlanRow => {
         const base = {
             fingerprint: fingerprints[i],
             date: row.date.toISOString(),
             amount: row.amount,
             description: row.description,
             kind: (row.amount > 0 ? "income" : "expense") as PlanRow["kind"],
-            category: suggestions[i],
+            category: null,
+            suggestion: null,
             transferAccountId: null,
             linkTransactionId: null,
         };
@@ -193,6 +195,17 @@ export async function planImport(userId: string, account: Account, rows: Stateme
 
         return {...base, status: "new", include: true, note: null};
     });
+
+    // Categories for every line, in case one is switched to income or expense in the
+    // preview; only new income and expense lines are sent to Jev
+    const suggestions = await suggestCategories(
+        userId,
+        rows.map((row) => ({...row, accountName: account.name, accountType: account.type})),
+        (i) => plan[i].status === "new" && plan[i].kind !== "transfer",
+    );
+    return plan.map((row, i) => row.linkTransactionId
+        ? row
+        : {...row, category: suggestions[i].name, suggestion: suggestions[i]});
 }
 
 export type CommitResult = { created: number, linked: number, skipped: number };
@@ -284,12 +297,18 @@ export async function commitImport(userId: string, account: Account, rows: PlanR
                 result.created++;
             } else {
                 const type = row.kind;
+                const category = row.category ?? "Unsorted";
+                // Changing the suggested category in the preview counts as sorting it yourself
+                const pickedByYou = !row.suggestion || row.suggestion.name !== category;
                 const created = await tx.transaction.create({
                     data: {
                         userId, amount, date, description: row.description, type, source: "import",
-                        categoryId: categoryId(type, row.category),
+                        categoryId: categoryId(type, category),
                         accountId: account.id,
                         payeeKey: payeeKey(row.description),
+                        ...(pickedByYou
+                            ? {categorizedBy: "you", needsReview: category === "Unsorted"}
+                            : categorizationFields(row.suggestion!)),
                     },
                 });
                 await applyHistoryChanges(tx, userId, [{date, type, amount}]);

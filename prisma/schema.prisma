@@ -46,20 +46,30 @@ model Transaction {
   plaidItem          PlaidItem? @relation(fields: [plaidItemId], references: [id], onDelete: SetNull)
 
   // Where the money came from (for transfers) or went in or out of
-  accountId    String?
-  account      Account?      @relation("AccountTransactions", fields: [accountId], references: [id], onDelete: SetNull)
+  accountId          String?
+  account            Account?      @relation("AccountTransactions", fields: [accountId], references: [id], onDelete: SetNull)
   // Transfers only: the account the money went to
-  toAccountId  String?
-  toAccount    Account?      @relation("TransferDestination", fields: [toAccountId], references: [id], onDelete: SetNull)
+  toAccountId        String?
+  toAccount          Account?      @relation("TransferDestination", fields: [toAccountId], references: [id], onDelete: SetNull)
   // How it was entered: manual, import, apple_pay or plaid
-  source       String        @default("manual")
+  source             String        @default("manual")
   // Normalized merchant name, used to suggest a category from past transactions
-  payeeKey     String?
-  importedRows ImportedRow[]
+  payeeKey           String?
+  // Shown on the Sort page until you confirm or change the category
+  needsReview        Boolean       @default(false)
+  // Where the category came from: you, history, bank, keyword, ai or plaid.
+  // Only your own choices (and older rows without a value) teach future suggestions.
+  categorizedBy      String?
+  // Jev's confidence in the category it picked, from 0 to 1
+  categoryConfidence Float?
+  // Jev's most likely categories, [{name, probability}], offered as one-tap choices
+  aiSuggestions      Json?
+  importedRows       ImportedRow[]
 
   @@index([categoryId], map: "Transaction_categoryId_fkey")
   @@index([userId, date])
   @@index([userId, payeeKey])
+  @@index([userId, needsReview])
 }
 
 model Account {
