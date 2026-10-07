@@ -1,0 +1,16 @@
+# HTTPS certificates are issued automatically for the domain in .env
+{$DOMAIN} {
+	encode gzip
+
+	# Clients must never set this Next.js internal header (CVE-2025-29927)
+	request_header -x-middleware-subrequest
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+	}
+
+	reverse_proxy app:3000
+}
