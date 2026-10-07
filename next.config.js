@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    // Self-contained server for the Docker image
+    // Self-contained server that scripts/deploy.sh uploads
     output: 'standalone',
     experimental: {
         // Statement files are uploaded through a server action

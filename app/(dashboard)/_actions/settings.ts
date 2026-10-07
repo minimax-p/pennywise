@@ -42,7 +42,7 @@ export async function ConvertSelfZelle(dryRun: boolean): Promise<ActionResult<{ 
 
     const accounts = await prisma.account.findMany({where: {userId: user.id}});
     const candidates = await prisma.transaction.findMany({
-        where: {userId: user.id, type: {in: ["income", "expense"]}, accountId: {not: null}, description: {contains: "zelle"}},
+        where: {userId: user.id, type: {in: ["income", "expense"]}, accountId: {not: null}, description: {contains: "zelle", mode: "insensitive"}},
     });
     const conversions: { id: string, from: string, to: string }[] = [];
     let skipped = 0;

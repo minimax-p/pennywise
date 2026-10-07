@@ -2,7 +2,7 @@
 
 A personal finance tracker for one person, meant to run on your own server. Every account and every dollar in one place: balances checked against your bank, statements imported and verified day by day, Apple Pay purchases logged from your iPhone, and a phone-first design.
 
-Built with Next.js 14 (App Router), Prisma with MySQL/MariaDB, TanStack Query, shadcn/ui and Recharts.
+Built with Next.js 14 (App Router), Prisma with PostgreSQL, TanStack Query, shadcn/ui and Recharts.
 
 ## Features
 
@@ -29,14 +29,15 @@ Built with Next.js 14 (App Router), Prisma with MySQL/MariaDB, TanStack Query, s
 
 ## Running locally
 
-Requirements: Node.js 20+ and MySQL 8 or MariaDB 10.11+.
+Requirements: Node.js 20+ and PostgreSQL 13+ (on a Mac: `brew install postgresql@16 && brew services start postgresql@16`).
 
 ```bash
 npm install
+createdb pennywise
 cp .env.example .env
 node scripts/hash-password.mjs      # paste the output into PENNYWISE_PASSWORD_HASH
 openssl rand -base64 32             # paste into SESSION_SECRET
-# set DATABASE_URL to your local database
+# DATABASE_URL in .env points at the pennywise database; change it if your setup differs
 npm run db:migrate
 npm run db:seed
 npm run dev
@@ -46,73 +47,97 @@ Open http://localhost:3000 and enter your password.
 
 ## Deploying to a server
 
-These steps fit a small VPS such as a $6/month Vultr instance with 1 GB of RAM running Ubuntu. Docker Compose runs:
-- the app
-- MariaDB
-- Caddy, which gets and renews the HTTPS certificate
-- a backup job that dumps the database every day
+Pennywise runs on any small Ubuntu server (22.04 or newer) that has Node.js 18+, [pm2](https://pm2.keymetrics.io) and PostgreSQL 13+, behind nginx. A 1 GB VPS is plenty, because your computer does the building and the server only runs the app (about 100 MB of memory).
 
-1. **Point a domain at the server.** Create a DNS `A` record for a domain or subdomain you own (for example `money.yourname.com`) pointing at the server's IP address.
+Everything is one command, run on your computer from this repository:
 
-2. **Prepare the server.** SSH in, then install Docker, add swap (building the app needs more than 1 GB of memory) and open the firewall:
-   ```bash
-   curl -fsSL https://get.docker.com | sh
-   fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
-   echo '/swapfile none swap sw 0 0' >> /etc/fstab
-   ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw allow 443/udp && ufw --force enable
-   ```
+```bash
+./scripts/deploy.sh
+```
 
-3. **Get the code and configure it.**
-   ```bash
-   git clone https://github.com/minimax-p/pennywise.git && cd pennywise
-   cp .env.example .env
-   ```
-   Fill in `.env`:
-   - `DOMAIN`: your domain from step 1
-   - `DB_PASSWORD` and `DB_ROOT_PASSWORD`: each from `openssl rand -hex 24`
-   - `SESSION_SECRET`: from `openssl rand -base64 32`
-   - `TZ`: your time zone, e.g. `America/Los_Angeles`
-   - `PENNYWISE_NAME`: optional
+The first time, it asks for the server (as you'd `ssh` to it, e.g. `root@203.0.113.7`) and your SSH key, and saves them in `.env.deploy`. Then it:
+1. builds the app on your computer
+2. on the server, creates a PostgreSQL database and user for Pennywise with a random password, and `/opt/pennywise` with its settings in `/opt/pennywise/.env`
+3. applies the database migrations through an SSH tunnel, so the database never has to be reachable from the internet
+4. asks you to choose the login password, if there isn't one yet
+5. starts Pennywise with pm2 on `127.0.0.1:3200`, and only switches over once the new version answers
+6. sets up a daily database backup
 
-   Then create your password hash and paste it into `PENNYWISE_PASSWORD_HASH`:
-   ```bash
-   docker compose run --rm migrate node scripts/hash-password.mjs
-   ```
+Run the same command to put a new version live. It backs up the database first, and if the new version doesn't start, the previous one stays live.
 
-4. **Start it.**
-   ```bash
-   docker compose up -d --build
-   ```
-   The first build takes a few minutes. Then open `https://your-domain` and log in.
+| Command | What it does |
+|---|---|
+| `./scripts/deploy.sh` | Build this checkout and put it live |
+| `./scripts/deploy.sh password` | Change the login password |
+| `./scripts/deploy.sh rollback` | Go back to the version before |
+| `./scripts/deploy.sh restart` | Restart, e.g. after editing `/opt/pennywise/.env` |
+| `./scripts/deploy.sh logs` | Show the app's log |
+| `./scripts/deploy.sh backup` | Back up the database and download the file into `backups/` |
 
-5. **Update later.** Take a backup first when an update changes the database (the pull request says so), then:
-   ```bash
-   docker compose exec db sh -c 'mariadb-dump -u pennywise -p"$MARIADB_PASSWORD" pennywise' | gzip > backups/before-update.sql.gz
-   git pull && docker compose up -d --build
-   ```
-   Database migrations run automatically on every start.
+### nginx and HTTPS
+
+Point nginx at `127.0.0.1:3200` and get a certificate with certbot:
+
+```nginx
+server {
+    server_name money.example.com;
+    location / {
+        proxy_pass http://127.0.0.1:3200;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # Clients must never set this Next.js internal header (CVE-2025-29927)
+        proxy_set_header x-middleware-subrequest "";
+        client_max_body_size 6m;
+    }
+}
+```
+
+```bash
+certbot --nginx -d money.example.com
+```
+
+If pm2 isn't already set to start at boot, run `pm2 startup` once on the server (deploy.sh reminds you).
+
+### Moving from the Docker install
+
+Earlier versions of Pennywise ran in Docker with MariaDB in `/root/pennywise`. `./scripts/deploy.sh` finds that install and moves you off it in the same run:
+1. it stops the old app, so nothing changes during the copy, and saves a last MariaDB backup in `/opt/pennywise/backups`
+2. it copies every row into PostgreSQL in one transaction, reads each one back to check it arrived unchanged, and prints the balance of every account so you can compare them with what the app showed
+3. your password, login sessions, time zone and other settings are carried over from the old `.env`
+4. the new version starts on the same port, so nginx needs no change, and the old containers are stopped (not deleted)
+
+If anything fails along the way, the old install is started again and the new database is emptied, so you can simply run the command again. Once you're happy, free the space the old install takes:
+
+```bash
+./scripts/deploy.sh remove-docker
+```
 
 ### Backups
 
-Every day the `backup` service writes `backups/pennywise-YYYY-MM-DD.sql.gz` next to `docker-compose.yml` and keeps two weeks of files. Copy them off the server now and then, for example from your Mac:
+Every night `/opt/pennywise/backup.sh` saves the database to `/opt/pennywise/backups` and keeps two weeks of them, plus one before every update. To keep a copy on your computer:
 
 ```bash
-scp root@your-server:pennywise/backups/*.sql.gz ~/Documents/pennywise-backups/
+./scripts/deploy.sh backup
 ```
 
 Vultr's automatic backups or snapshots are a good second layer.
 
-To restore a backup:
+To restore a backup on the server, into an empty database:
 
 ```bash
-gunzip -c backups/pennywise-2026-10-01.sql.gz | docker compose exec -T db sh -c 'mariadb -u pennywise -p"$MARIADB_PASSWORD" pennywise'
+pm2 stop pennywise
+runuser -u postgres -- dropdb pennywise
+runuser -u postgres -- createdb -O pennywise pennywise
+gunzip -c /opt/pennywise/backups/pennywise-....sql.gz | runuser -u postgres -- psql -q pennywise
+pm2 start pennywise
 ```
 
 ### Security notes
 
 - Use a long password, at least 12 characters (the hash script enforces that). After 5 wrong attempts, an IP address is locked out for 15 minutes.
 - Changing `SESSION_SECRET` logs out every session.
-- Caddy strips the `x-middleware-subrequest` header and adds HSTS and other security headers.
+- Pennywise listens on `127.0.0.1` only; the database is reachable only from the server itself. Only root can read `/opt/pennywise/.env`.
 - Apple Pay shortcut keys are stored as hashes. Revoke one on the Manage page if you lose the phone.
 
 ## Getting your transactions in
@@ -180,12 +205,7 @@ In Safari, open your Pennywise address, tap Share, then **Add to Home Screen**.
 - It's asked once per merchant per import, never for merchants you've already sorted, and never for transfers.
 - At Jev's published price ($42 per billion input tokens) a year of transactions costs well under a cent.
 
-To turn it on, create an API key at typesafe.ai and add it to `.env` on the server, then restart:
-
-```bash
-echo 'TYPESAFE_API_KEY=your-key' >> .env
-docker compose up -d
-```
+To turn it on, create an API key at typesafe.ai, add it to `/opt/pennywise/.env` on the server as `TYPESAFE_API_KEY=your-key`, then run `./scripts/deploy.sh restart`.
 
 For a new merchant, Jev receives the transaction's description, amount, date, the account's name and type, the bank's category, your category names, and up to 40 of your recent merchant → category choices. It doesn't receive account numbers or balances. Check TypeSafe's terms for how they handle that data. Without a key, nothing leaves your server and everything else works the same.
 
@@ -208,15 +228,17 @@ Pennywise can also pull transactions through Plaid. The Plaid section on the Man
 | `npm run db:migrate` | Apply database migrations |
 | `npm run db:seed` | Add the shared categories (safe to run again) |
 | `node scripts/hash-password.mjs` | Print a password hash for `PENNYWISE_PASSWORD_HASH` |
+| `./scripts/deploy.sh` | Put Pennywise on your server (see above) |
 
 ### Tests
 
 `npm test` runs the unit tests. The database tests (import, accounts, sorting, Apple Pay capture, Plaid sync and server actions) run when `TEST_DATABASE_URL` points at a disposable database that has been migrated and seeded:
 
 ```bash
-DATABASE_URL="mysql://user:password@localhost:3306/pennywise_test" npm run db:migrate
-DATABASE_URL="mysql://user:password@localhost:3306/pennywise_test" npm run db:seed
-TEST_DATABASE_URL="mysql://user:password@localhost:3306/pennywise_test" npm test
+createdb pennywise_test
+DATABASE_URL="postgresql://localhost/pennywise_test" npm run db:migrate
+DATABASE_URL="postgresql://localhost/pennywise_test" npm run db:seed
+TEST_DATABASE_URL="postgresql://localhost/pennywise_test" npm test
 ```
 
 ## Project layout
@@ -247,9 +269,12 @@ lib/
   payee.ts                Normalizes merchant names to recognize repeat merchants
   plaid*.ts, crypto.ts    Optional Plaid sync
 prisma/                   Schema, migrations and the category seed
-scripts/                  Password hash helper
+scripts/
+  deploy.sh               Builds on your computer and deploys over SSH
+  server.sh               Its server side: database, pm2, backups, releases
+  copy-from-mariadb.mjs   One-time copy from the old MariaDB install
+  hash-password.mjs       Password hash helper
 tests/                    Vitest tests and sample statements
-Dockerfile, docker-compose.yml, Caddyfile   Deployment
 ```
 
 Balances come from `lib/ledger.ts`: an account's balance is its latest `BalanceCheck` plus the transactions dated after it, and each pair of neighbouring checks verifies the transactions between them. Reports are computed straight from transactions by `lib/reports.ts`; whether money counts as spending or income follows its category, so money back in a spending category lowers it.

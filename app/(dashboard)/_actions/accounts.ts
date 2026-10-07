@@ -33,7 +33,7 @@ async function requireUser() {
 
 async function nameTaken(userId: string, name: string, excludeId?: string) {
     const existing = await prisma.account.findFirst({
-        where: {userId, name, ...(excludeId && {NOT: {id: excludeId}})},
+        where: {userId, name: {equals: name, mode: "insensitive"}, ...(excludeId && {NOT: {id: excludeId}})},
     });
     return existing ? `An account named "${name}" already exists` : null;
 }

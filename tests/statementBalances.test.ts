@@ -1,7 +1,7 @@
 import {afterAll, beforeEach, describe, expect, it, vi} from "vitest";
 import {readFileSync} from "node:fs";
 
-// Statement balances, Zelle to yourself and Home against a real MySQL database
+// Statement balances, Zelle to yourself and Home against a real PostgreSQL database
 // (TEST_DATABASE_URL); skipped otherwise.
 const {testDatabaseUrl, userId} = vi.hoisted(() => {
     const {randomUUID} = require("node:crypto");

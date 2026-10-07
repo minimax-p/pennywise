@@ -2,7 +2,7 @@ import {afterAll, beforeEach, describe, expect, it, vi} from "vitest";
 import {randomBytes, randomUUID} from "node:crypto";
 import {plaidTransaction} from "./factories";
 
-// Runs against a real MySQL database. Point TEST_DATABASE_URL at a disposable database
+// Runs against a real PostgreSQL database. Point TEST_DATABASE_URL at a disposable database
 // with migrations applied (npx prisma migrate deploy); the test is skipped otherwise.
 const testDatabaseUrl = vi.hoisted(() => {
     const url = process.env.TEST_DATABASE_URL;
