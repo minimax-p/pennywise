@@ -26,6 +26,7 @@ Built with Next.js 14 (App Router), Prisma with PostgreSQL, TanStack Query, shad
 - **Readable names:** "WAL-MART #2131    MIDDLETOWN NY" shows as Walmart and "SQ *BLUE BOTTLE COFFEE 0412" as Blue Bottle Coffee. Rename any line; the bank's text is kept and shown under it.
 - **AI sorting with Jev (optional):** with a TypeSafe AI key, Jev picks categories for merchants you haven't sorted before. Confident answers are filed automatically and unsure ones go to the Sort page.
 - **Spending that means something:** moving money between your accounts isn't spending or income. A refund, or a friend paying you back, filed under the spending category it was for lowers that spending instead of counting as income.
+- **Categories that fit:** about 25, in groups (Home, Food, Getting around, Life, Money), with keywords for well-known chains so Walmart, Chipotle or Sunoco are filed without asking. Rename, regroup, hide or merge any of them on Manage, and add your own.
 - **Reports:** spending and money in by month or year, by category, with a chart and a table.
 - **Transactions:** every account in one list, grouped by day. Search descriptions, people, notes, categories and amounts, filter by kind, account or dates, and tap a line to edit or delete it.
 - **Login:** a single password. Wrong guesses are throttled, and the session cookie is signed.
@@ -198,7 +199,7 @@ Pennywise picks a category for each new transaction, trying in this order:
 1. your rules
 2. what you chose before for the same merchant
 3. the category in the bank's export
-4. keywords such as PAYROLL or NETFLIX
+4. keywords for well-known names, such as PAYROLL, NETFLIX, WALMART or SUNOCO
 5. Jev, if it's turned on (see below)
 
 Anything it isn't sure about goes to **Sort**, which shows a count in the menu and a reminder on Home. Each card is one merchant or person:
@@ -208,6 +209,12 @@ Anything it isn't sure about goes to **Sort**, which shows a count in the menu a
 - Made a mistake? **Undo**, or the Undo in the message that pops up.
 
 The category you pick is also used the next time that merchant shows up, so the Sort page gets shorter over time.
+
+### Categories
+
+Pennywise starts with a short list of categories in groups. On **Manage**, tap one to rename it, change its emoji, move it to another group or hide it; or merge it into another, which moves its transactions. Hidden categories aren't offered any more, but transactions keep them. Transfer, Split, Adjustment and Unsorted can't be changed, because Pennywise relies on them.
+
+Updating from an earlier version moves your transactions from the old, longer list to the new one (for example Restaurants, Fast Food and Takeout all become Eating out). Categories you made yourself stay as they are.
 
 ### 6. Add Pennywise to the home screen
 
@@ -288,7 +295,7 @@ lib/
   capture.ts              Apple Pay shortcut keys and card matching
   payee.ts                Normalizes merchant names to recognize repeat merchants
   plaid*.ts, crypto.ts    Optional Plaid sync
-prisma/                   Schema, migrations and the category seed
+prisma/                   Schema, migrations, the built-in categories (categories.mjs) and their seed
 scripts/
   deploy.sh               Builds on your computer and deploys over SSH
   server.sh               Its server side: database, pm2, backups, releases
