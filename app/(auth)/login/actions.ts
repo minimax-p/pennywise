@@ -3,15 +3,10 @@
 import {cookies, headers} from "next/headers";
 import {redirect} from "next/navigation";
 import {verifyPassword} from "@/lib/password";
-import {createSessionToken, SESSION_COOKIE, SESSION_MAX_AGE_SECONDS} from "@/lib/session";
+import {createSessionToken, safeRedirectPath, SESSION_COOKIE, SESSION_MAX_AGE_SECONDS} from "@/lib/session";
 import {clearFailures, isLockedOut, recordFailure} from "@/lib/loginThrottle";
 
 export type LoginState = { error: string | null };
-
-// Only allow redirects back into this app after login
-function safeNext(value: FormDataEntryValue | null) {
-    return typeof value === "string" && value.startsWith("/") && !value.startsWith("//") ? value : "/";
-}
 
 function clientIp() {
     return headers().get("x-forwarded-for")?.split(",")[0].trim() || headers().get("x-real-ip") || "unknown";
@@ -43,7 +38,7 @@ export async function Login(_: LoginState, formData: FormData): Promise<LoginSta
         path: "/",
         maxAge: SESSION_MAX_AGE_SECONDS,
     });
-    redirect(safeNext(formData.get("next")));
+    redirect(safeRedirectPath(formData.get("next")));
 }
 
 export async function Logout() {

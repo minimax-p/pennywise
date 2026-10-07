@@ -1,6 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it} from "vitest";
 import {spawnSync} from "node:child_process";
-import {createSessionToken, SESSION_MAX_AGE_SECONDS, verifySessionToken} from "@/lib/session";
+import {createSessionToken, safeRedirectPath, SESSION_MAX_AGE_SECONDS, verifySessionToken} from "@/lib/session";
 import {hashPassword, verifyPassword} from "@/lib/password";
 import {clearFailures, isLockedOut, recordFailure} from "@/lib/loginThrottle";
 
@@ -73,5 +73,19 @@ describe("login throttle", () => {
         expect(isLockedOut(ip, start + 30)).toBe(true);
         expect(isLockedOut("198.51.100.1", start + 30)).toBe(false);
         expect(isLockedOut(ip, start + 20 + 15 * 60 * 1000)).toBe(false);
+    });
+});
+
+describe("safeRedirectPath", () => {
+    it.each([
+        ["/transactions?from=x", "/transactions?from=x"],
+        ["/", "/"],
+        ["//evil.example", "/"],
+        ["/\\evil.example", "/"],
+        ["https://evil.example", "/"],
+        ["", "/"],
+        [null, "/"],
+    ])("%s -> %s", (input, expected) => {
+        expect(safeRedirectPath(input)).toBe(expected);
     });
 });

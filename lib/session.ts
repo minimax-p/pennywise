@@ -56,3 +56,12 @@ export async function verifySessionToken(token: string | undefined, now = Date.n
         return false;
     }
 }
+
+// Where to go after logging in: only paths inside this app. Browsers read "//host",
+// and a backslash in place of either slash, as another site, so those are refused.
+export function safeRedirectPath(value: unknown): string {
+    if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) {
+        return "/";
+    }
+    return value;
+}
