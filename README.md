@@ -14,6 +14,8 @@ Built with Next.js 14 (App Router), Prisma with MySQL/MariaDB, TanStack Query, s
   - Transfers are recognized from both accounts' statements.
   - Categories are suggested from what you picked before for the same merchant.
 - **Apple Pay shortcut:** an iPhone Shortcuts automation logs each Apple Pay purchase the moment you pay, in the right account and category.
+- **Sort page:** every transaction Pennywise isn't sure about waits here with one-tap category suggestions. One tap can also sort every other waiting transaction from the same merchant, and your choices are remembered for next time.
+- **AI sorting with Jev (optional):** with a TypeSafe AI key, Jev picks categories for merchants you haven't sorted before. Confident answers are filed automatically and unsure ones go to the Sort page.
 - **Dashboard:** income, spending and balance for a date range, spending by category, and monthly or yearly history.
 - **Transactions:** search, filter by type or account, and edit or delete. Editing can also change the type, for example turning a card payment into a transfer.
 - **Login:** a single password. Wrong guesses are throttled, and the session cookie is signed.
@@ -22,7 +24,7 @@ Built with Next.js 14 (App Router), Prisma with MySQL/MariaDB, TanStack Query, s
 
 ## Running locally
 
-Requirements: Node.js 18.17+ and MySQL 8 or MariaDB 10.11+.
+Requirements: Node.js 20+ and MySQL 8 or MariaDB 10.11+.
 
 ```bash
 npm install
@@ -138,9 +140,42 @@ On **Manage → Apple Pay shortcut**, click **Set up the shortcut**. It creates 
 
 The automation only sees Apple Pay taps: no online purchases typed in by card number, and no swipes of the physical card. Importing statements fills in the rest, and matches the purchases already logged instead of duplicating them.
 
-### 4. Add Pennywise to the home screen
+### 4. Sort what's left
+
+Pennywise picks a category for each new transaction, trying in this order:
+1. what you chose before for the same merchant
+2. the category in the bank's export
+3. keywords such as PAYROLL or NETFLIX
+4. Jev, if it's turned on (see below)
+
+Anything it isn't sure about goes to **Sort**, which shows a count in the menu and a reminder on the dashboard.
+- Tap the right category, or **Other category** for the full list.
+- Leave **Also sort N more from this merchant** ticked to sort the rest of that merchant's waiting transactions at the same time.
+- **Edit** opens the full editor, for example to turn a line into a transfer.
+
+The category you pick is used the next time that merchant shows up, so the Sort page gets shorter over time.
+
+### 5. Add Pennywise to the home screen
 
 In Safari, open your Pennywise address, tap Share, then **Add to Home Screen**.
+
+## Optional: AI sorting with Jev
+
+[Jev](https://typesafe.ai) is TypeSafe AI's classification model. Pennywise asks it to pick one of your categories for merchants it hasn't seen you sort, and sends it your recent choices as examples.
+- Jev's confidence decides what happens. At 80% or more, the category is filed automatically. Below that, the transaction goes to the Sort page with Jev's top guesses as the buttons.
+- It's asked once per merchant per import, never for merchants you've already sorted, and never for transfers.
+- At Jev's published price ($42 per billion input tokens) a year of transactions costs well under a cent.
+
+To turn it on, create an API key at typesafe.ai and add it to `.env` on the server, then restart:
+
+```bash
+echo 'TYPESAFE_API_KEY=your-key' >> .env
+docker compose up -d
+```
+
+For a new merchant, Jev receives the transaction's description, amount, date, the account's name and type, the bank's category, your category names, and up to 40 of your recent merchant → category choices. It doesn't receive account numbers or balances. Check TypeSafe's terms for how they handle that data. Without a key, nothing leaves your server and everything else works the same.
+
+To sort transactions that came in before you added the key, use **Ask Jev** on the Sort page.
 
 ## Optional: Plaid bank sync
 
@@ -162,7 +197,7 @@ Pennywise can also pull transactions through Plaid. The Plaid section on the Man
 
 ### Tests
 
-`npm test` runs the unit tests. The database tests (import, accounts, Apple Pay capture, Plaid sync and server actions) run when `TEST_DATABASE_URL` points at a disposable database that has been migrated and seeded:
+`npm test` runs the unit tests. The database tests (import, accounts, sorting, Apple Pay capture, Plaid sync and server actions) run when `TEST_DATABASE_URL` points at a disposable database that has been migrated and seeded:
 
 ```bash
 DATABASE_URL="mysql://user:password@localhost:3306/pennywise_test" npm run db:migrate
@@ -176,9 +211,10 @@ TEST_DATABASE_URL="mysql://user:password@localhost:3306/pennywise_test" npm test
 app/
   (auth)/login/           Password login
   (dashboard)/            Dashboard, Transactions, Import and Manage pages
-    _actions/             Server actions (transactions, accounts, categories, Apple Pay keys, Plaid)
+    _actions/             Server actions (transactions, accounts, categories, sorting, Apple Pay keys, Plaid)
     _components/          Dashboard and Manage page components
     import/               Statement import page and actions
+    review/               Sort page
     transactions/         Transactions table and dialogs
   api/                    Route handlers the pages read from; api/capture is the Apple Pay endpoint
   wizard/                 First-run currency setup
@@ -187,7 +223,8 @@ lib/
   auth.ts, session.ts     Login session
   accounts.ts             Account balances and transfers
   history.ts              Keeps daily and monthly totals in step with transactions
-  import/                 Statement parsing, matching and category suggestions
+  import/                 Statement parsing and matching
+  categorize/             Category suggestions: your history, bank categories, keywords and Jev
   capture.ts              Apple Pay shortcut keys and card matching
   payee.ts                Normalizes merchant names to recognize repeat merchants
   plaid*.ts, crypto.ts    Optional Plaid sync

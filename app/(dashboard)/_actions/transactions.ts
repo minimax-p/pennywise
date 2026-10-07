@@ -61,6 +61,7 @@ export async function CreateTransaction(form: CreateTransactionSchemaType) {
                 categoryId: categoryRow.id,
                 accountId: accountId || null,
                 payeeKey: description ? payeeKey(description) : null,
+                categorizedBy: "you",
             }
         });
         await applyHistoryChanges(tx, user.id, [{date, type, amount}]);
@@ -141,6 +142,10 @@ export async function EditTransaction(form: EditTransactionSchemaType) {
                 accountId: accountId || null,
                 toAccountId: type === "transfer" ? toAccountId : null,
                 payeeKey: type === "transfer" ? null : editedPayeeKey(existing, description),
+                // Saving the edit counts as sorting it yourself
+                categorizedBy: type === "transfer" ? null : "you",
+                needsReview: false,
+                categoryConfidence: null,
             }
         });
         await applyHistoryChanges(tx, user.id, [

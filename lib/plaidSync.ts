@@ -112,6 +112,7 @@ export async function syncPlaidItem(item: PlaidItem): Promise<PlaidSyncResult> {
     const toCreate: {
         userId: string, amount: number, description: string, date: Date, type: string,
         categoryId: string, plaidTransactionId: string, plaidItemId: string,
+        categorizedBy: string | null, needsReview: boolean,
     }[] = [];
 
     for (const [plaidTransactionId, added] of addedById) {
@@ -127,6 +128,8 @@ export async function syncPlaidItem(item: PlaidItem): Promise<PlaidSyncResult> {
             categoryId: categoryFor(converted.type, converted.categoryName).id,
             plaidTransactionId,
             plaidItemId: item.id,
+            categorizedBy: converted.categoryName ? "plaid" : null,
+            needsReview: !converted.categoryName,
         });
         historyChanges.push({date: converted.date, type: converted.type, amount: converted.amount});
     }

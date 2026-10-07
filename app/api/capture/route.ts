@@ -2,7 +2,7 @@ import z from "zod";
 import prisma from "@/lib/prisma";
 import {findAccountForCard, hashCaptureToken, parseShortcutDate} from "@/lib/capture";
 import {parseAmount} from "@/lib/import/parse";
-import {suggestCategoryName} from "@/lib/import/categories";
+import {categorizationFields, suggestCategories} from "@/lib/categorize/suggest";
 import {applyHistoryChanges} from "@/lib/history";
 import {payeeKey} from "@/lib/payee";
 import {DateToUTCDate, GetFormatterForCurrency} from "@/lib/helpers";
@@ -72,14 +72,20 @@ export async function POST(request: Request) {
         return json({id: recent.id, duplicate: true, message: `Already logged ${formatter.format(amount)} at ${body.merchant}`}, 200);
     }
 
-    const [categoryName] = await suggestCategoryName(userId, [{
-        date, amount: -amount, description: body.merchant, externalId: null, bankCategory: null, skipReason: null,
+    let [suggestion] = await suggestCategories(userId, [{
+        date, amount: -amount, description: body.merchant, bankCategory: null,
+        accountName: account?.name ?? null, accountType: account?.type ?? null,
     }]);
-    const category = await prisma.category.findFirst({
-        where: {name: categoryName, type: "expense", OR: [{userId}, {isUniversal: true}]},
+    let category = await prisma.category.findFirst({
+        where: {name: suggestion.name, type: "expense", OR: [{userId}, {isUniversal: true}]},
         orderBy: {isUniversal: "asc"},
-    }) ?? await prisma.category.findFirst({where: {name: "Unsorted", type: "expense", isUniversal: true}})
-        ?? await prisma.category.create({data: {name: "Unsorted", icon: "❓", type: "expense", isUniversal: true}});
+    });
+    if (!category) {
+        suggestion = {name: "Unsorted", source: "none", confidence: null, alternatives: null};
+        category = await prisma.category.findFirst({where: {name: "Unsorted", type: "expense", isUniversal: true}})
+            ?? await prisma.category.create({data: {name: "Unsorted", icon: "❓", type: "expense", isUniversal: true}});
+    }
+    const fields = categorizationFields(suggestion);
 
     const transaction = await prisma.$transaction(async (tx) => {
         const created = await tx.transaction.create({
@@ -89,6 +95,7 @@ export async function POST(request: Request) {
                 payeeKey: payeeKey(body.merchant),
                 categoryId: category.id,
                 accountId: account?.id ?? null,
+                ...fields,
             },
         });
         await applyHistoryChanges(tx, userId, [{date, type: "expense", amount}]);
@@ -100,7 +107,9 @@ export async function POST(request: Request) {
         id: transaction.id,
         account: account?.name ?? null,
         category: category.name,
+        needsReview: fields.needsReview,
         message: `Logged ${formatter.format(amount)} at ${body.merchant}`
-            + ` → ${category.icon} ${category.name}${account ? ` (${account.name})` : ""}`,
+            + ` → ${category.icon} ${category.name}${account ? ` (${account.name})` : ""}`
+            + (fields.needsReview ? ". Sort it in Pennywise." : ""),
     }, 201);
 }

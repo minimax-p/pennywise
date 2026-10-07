@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { LockKeyhole, Menu } from "lucide-react";
 import { Logout } from "@/app/(auth)/login/actions";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 
 function Navbar() {
     return (
@@ -24,6 +25,7 @@ function Navbar() {
 const items = [
     { label: "Dashboard", link: "/" },
     { label: "Transactions", link: "/transactions" },
+    { label: "Sort", link: "/review" },
     { label: "Import", link: "/import" },
     { label: 'Manage', link: "/manage" },
 ]
@@ -128,6 +130,15 @@ function LockButton() {
     )
 }
 
+// Transactions waiting on the Sort page
+function useReviewCount() {
+    const { data } = useQuery<{ count: number }>({
+        queryKey: ['review', 'count'],
+        queryFn: () => fetch('/api/review/count').then((res) => res.json()),
+    });
+    return data?.count ?? 0;
+}
+
 function NavbarItem({ link, label, clickCallBack }: {
     link: string,
     label: string,
@@ -135,6 +146,8 @@ function NavbarItem({ link, label, clickCallBack }: {
 }) {
     const pathname = usePathname()
     const isActive = pathname === link
+    const reviewCount = useReviewCount()
+    const badge = link === "/review" && reviewCount > 0 ? reviewCount : null
     return (
         <div className="relative flex items-center">
             <Link href={link} className={cn(
@@ -146,6 +159,11 @@ function NavbarItem({ link, label, clickCallBack }: {
                   }}
             >
                 {label}
+                {badge !== null && (
+                    <span className="ml-1 rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-black">
+                        {badge > 99 ? "99+" : badge}
+                    </span>
+                )}
             </Link>
             <AnimatePresence>
                 {isActive && (

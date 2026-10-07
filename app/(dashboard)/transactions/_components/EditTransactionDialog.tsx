@@ -84,6 +84,7 @@ function EditTransactionDialog({trigger, transaction}: Props) {
                 queryClient.invalidateQueries({queryKey: ['transactions']}),
                 queryClient.invalidateQueries({queryKey: ['overview']}),
                 queryClient.invalidateQueries({queryKey: ['accounts']}),
+                queryClient.invalidateQueries({queryKey: ['review']}),
             ]);
             setOpen(false);
         },

@@ -95,7 +95,7 @@ function ImportPage() {
             setPreview(null);
             setRows([]);
             setFile(null);
-            await Promise.all(['transactions', 'accounts', 'overview', 'categories'].map((key) =>
+            await Promise.all(['transactions', 'accounts', 'overview', 'categories', 'review'].map((key) =>
                 queryClient.invalidateQueries({queryKey: [key]})));
         } catch {
             toast.error("Import failed");
@@ -307,9 +307,24 @@ function PreviewRow({row, accountId, onChange}: { row: PlanRow, accountId: strin
                         )}
                     </div>
                 )}
+                {!linked && row.kind !== "transfer" && <SuggestionSource row={row}/>}
             </TableCell>
         </TableRow>
     );
+}
+
+// Where the suggested category came from, while it is still the one picked
+function SuggestionSource({row}: { row: PlanRow }) {
+    const suggestion = row.suggestion;
+    if (!suggestion || suggestion.name !== row.category) return null;
+    const label = {
+        history: "Like last time",
+        bank: "From the bank's category",
+        keyword: "From the description",
+        ai: `Jev, ${Math.round((suggestion.confidence ?? 0) * 100)}% sure`,
+        none: "Sort it later on the Sort page",
+    }[suggestion.source];
+    return <p className="mt-1 text-xs text-muted-foreground">{label}</p>;
 }
 
 const COLUMN_FIELDS: { key: keyof ColumnMapping, label: string, optional?: boolean }[] = [

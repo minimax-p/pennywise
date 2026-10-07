@@ -24,6 +24,12 @@ export const PlanRowSchema = z.object({
     include: z.boolean(),
     kind: z.enum(["income", "expense", "transfer"]),
     category: z.string().max(191).nullable(),
+    suggestion: z.object({
+        name: z.string().max(191),
+        source: z.enum(["history", "bank", "keyword", "ai", "none"]),
+        confidence: z.number().min(0).max(1).nullable(),
+        alternatives: z.array(z.object({name: z.string().max(191), probability: z.number().min(0).max(1)})).max(10).nullable(),
+    }).nullable(),
     transferAccountId: z.string().nullable(),
     linkTransactionId: z.string().nullable(),
     note: z.string().nullable(),

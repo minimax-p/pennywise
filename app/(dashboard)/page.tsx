@@ -8,6 +8,7 @@ import Overview from "@/app/(dashboard)/_components/Overview";
 import History from "@/app/(dashboard)/_components/History";
 import {ArrowRightLeft, CirclePlus} from "lucide-react";
 import AccountsSummary from "@/app/(dashboard)/_components/AccountsSummary";
+import ReviewBanner from "@/app/(dashboard)/_components/ReviewBanner";
 import CreateTransferDialog from "@/app/(dashboard)/_components/CreateTransferDialog";
 
 async function Page() {
@@ -50,6 +51,7 @@ async function Page() {
                     </div>
                 </div>
             </div>
+            <ReviewBanner />
             <AccountsSummary userSettings={userSettings} />
             <Overview userSettings={userSettings} />
             <History userSettings={userSettings} />
