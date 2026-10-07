@@ -27,6 +27,7 @@ model Category {
   isUniversal Boolean       @default(false)
   tag         String?
   Transaction Transaction[]
+  lines       TransactionLine[]
 
   @@unique([name, userId, type])
 }
@@ -52,6 +53,12 @@ model Transaction {
 
   // Zelle memo, Venmo note, statement memo or your own note
   note        String?  @db.VarChar(500)
+  // Who was on the other end: the Zelle or Venmo counterparty, or someone you picked
+  personId    String?
+  person      Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
+  // A split: your shares by category and other people's shares, adding up to the amount.
+  // A split transaction is filed under the built-in Split category.
+  lines       TransactionLine[]
 
   // Where the money came from (for transfers and adjustments out) or went in or out of
   accountId          String?
@@ -78,6 +85,7 @@ model Transaction {
   @@index([accountId])
   @@index([toAccountId])
   @@index([plaidItemId])
+  @@index([personId])
   @@index([userId, date])
   @@index([userId, payeeKey])
   @@index([userId, needsReview])
@@ -87,7 +95,7 @@ model Account {
   id                String        @id @default(uuid())
   userId            String
   name              String
-  // checking, savings, cd, credit or cash
+  // checking, savings, cd, credit, cash (bills and coins) or wallet (Venmo, PayPal, Cash App)
   type              String
   institution       String?
   // CDs only: yearly rate in percent and the day it matures
@@ -175,4 +183,40 @@ model PlaidItem {
   transactions    Transaction[]
 
   @@index([userId])
+}
+
+// Someone you send money to or get money from. People come from Zelle and Venmo lines, or
+// from splitting a bill. What they owe you is the sum of their split shares: shares of money
+// you paid count up, shares of money you got (them paying you back) count down.
+model Person {
+  id           String            @id @default(uuid())
+  userId       String
+  name         String
+  // How banks write the name, in capitals, e.g. "ALEX NGUYEN" from "Zelle payment from ALEX NGUYEN"
+  aliases      String[]          @default([])
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  transactions Transaction[]
+  lines        TransactionLine[]
+
+  @@unique([userId, name])
+}
+
+// One part of a split transaction: your share in a category, or another person's share
+model TransactionLine {
+  id            String      @id @default(uuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  // Positive; a transaction's lines add up to its amount
+  amount        Float
+  // Exactly one of the two
+  categoryId    String?
+  category      Category?   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  personId      String?
+  person        Person?     @relation(fields: [personId], references: [id], onDelete: Restrict)
+  position      Int         @default(0)
+
+  @@index([transactionId])
+  @@index([categoryId])
+  @@index([personId])
 }

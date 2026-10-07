@@ -44,6 +44,9 @@ export const CheckBalanceSchema = z.object({
     save: z.boolean(),
     // When saving a check that doesn't match: also add an adjustment for the difference
     adjust: z.boolean().default(false),
+    // Cash only, when there's less than expected: count the difference as cash you spent
+    // without logging it, instead of an adjustment
+    spend: z.boolean().default(false),
 })
 
 export type CheckBalanceSchemaType = z.input<typeof CheckBalanceSchema>;

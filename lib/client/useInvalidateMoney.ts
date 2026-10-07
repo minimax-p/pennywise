@@ -3,7 +3,7 @@
 import {useQueryClient} from "@tanstack/react-query";
 
 // Everything that shows balances, totals or transactions, refreshed after a change
-const MONEY_QUERIES = ['home', 'accounts', 'account', 'transactions', 'overview', 'reports', 'review', 'categories'];
+const MONEY_QUERIES = ['home', 'accounts', 'account', 'transactions', 'overview', 'reports', 'review', 'categories', 'people', 'person', 'merchants'];
 
 export function useInvalidateMoney() {
     const queryClient = useQueryClient();

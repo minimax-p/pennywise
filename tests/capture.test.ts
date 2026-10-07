@@ -75,7 +75,7 @@ describe.skipIf(!testDatabaseUrl)("POST /api/capture", () => {
         expect(response.status).toBe(201);
         const body = await response.json();
         expect(body).toMatchObject({account: "Discover", category: "Unsorted"});
-        expect(body.message).toBe("Logged $4.50 at Blue Bottle Coffee → ❓ Unsorted (Discover). Sort it in Pennywise.");
+        expect(body.message).toBe("Logged $4.50 at Blue Bottle Coffee (Discover). Sort it in Pennywise.");
         expect(body.needsReview).toBe(true);
 
         expect(await prisma.transaction.findUniqueOrThrow({where: {id: body.id}})).toMatchObject({

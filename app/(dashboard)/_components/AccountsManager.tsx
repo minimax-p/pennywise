@@ -27,7 +27,8 @@ const TYPE_HINTS: Record<AccountType, string> = {
     savings: "High-yield, emergency fund",
     cd: "Locked until it matures",
     credit: "Shows what you owe",
-    cash: "Wallet cash, Venmo balance",
+    cash: "Bills and coins in your wallet",
+    wallet: "Venmo, PayPal or Cash App balance",
 };
 
 function AccountsManager({currency}: { currency: string }) {

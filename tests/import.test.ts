@@ -55,12 +55,13 @@ describe.skipIf(!testDatabaseUrl)("statement import", () => {
         chase = await account("Chase checking", "checking", "Chase", 1000);
         discover = await account("Discover it", "credit", "Discover", -300);
         savings = await account("Capital One savings", "savings", "Capital One", 10000);
-        venmo = await account("Venmo", "cash", "Venmo", 20);
+        venmo = await account("Venmo", "wallet", "Venmo", 20);
     });
 
     afterAll(async () => {
         await prisma.importedRow.deleteMany({where: {account: {userId}}});
         await prisma.transaction.deleteMany({where: {userId}});
+        await prisma.person.deleteMany({where: {userId}});
         await prisma.account.deleteMany({where: {userId}});
         await prisma.$disconnect();
     });
@@ -162,11 +163,15 @@ describe.skipIf(!testDatabaseUrl)("statement import", () => {
     it("imports Venmo, leaving out payments funded from a bank card", async () => {
         const plan = await planImport(userId, venmo, statement("venmo.csv", venmo));
         expect(plan.map((r) => [r.description, r.status, r.include])).toEqual([
-            ["Jane Seller: couch", "skip", false],
-            ["Sam Friend: pizza split", "new", true],
-            ["Sam Friend: tacos", "new", true],
+            ["Jane Seller", "skip", false],
+            ["Sam Friend", "new", true],
+            ["Sam Friend", "new", true],
         ]);
         expect(await commitImport(userId, venmo, plan)).toEqual({created: 2, linked: 0, skipped: 1, statement: null});
         expect(await getBalance(venmo)).toBe(20 + 15 - 12);
+        // Both payments are with Sam, with Venmo's notes kept
+        const sam = await prisma.person.findFirstOrThrow({where: {userId, name: "Sam Friend"}});
+        const payments = await prisma.transaction.findMany({where: {userId, personId: sam.id}, orderBy: {date: "asc"}});
+        expect(payments.map((t) => [t.type, t.amount, t.note])).toEqual([["income", 15, "pizza split"], ["expense", 12, "tacos"]]);
     });
 });

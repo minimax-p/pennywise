@@ -78,7 +78,7 @@ export function checkStatus(ledger: Ledger, now = new Date()): CheckStatus {
 
 // How accounts are grouped on Home
 export const ACCOUNT_GROUPS = [
-    {id: "spending", label: "Cash & checking", types: ["checking", "cash"]},
+    {id: "spending", label: "Cash & checking", types: ["checking", "cash", "wallet"]},
     {id: "credit", label: "Credit cards", types: ["credit"]},
     {id: "savings", label: "Savings & CDs", types: ["savings", "cd"]},
 ] as const satisfies readonly { id: string, label: string, types: readonly AccountType[] }[];

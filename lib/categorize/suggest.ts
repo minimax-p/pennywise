@@ -64,6 +64,10 @@ const BANK_CATEGORIES: Record<string, string> = {
 };
 
 const KEYWORD_RULES: { pattern: RegExp, income: boolean, name: string }[] = [
+    {
+        pattern: /\b(OVERDRAFT|NSF|INSUFFICIENT FUNDS|SERVICE|MAINTENANCE|MONTHLY|WIRE|ATM|FOREIGN (TRANSACTION|EXCHANGE)|LATE( PAYMENT)?|RETURNED (ITEM|PAYMENT)|ANNUAL( MEMBERSHIP)?|CASH ADVANCE)\s+FEE|\bFEE FOR\b|ATM SURCHARGE|INTEREST CHARGE|PURCHASE INTEREST/i,
+        income: false, name: "Fees & interest",
+    },
     {pattern: /PAYROLL|DIRECT DEP|DIR DEP|SALARY/i, income: true, name: "Salary"},
     {pattern: /INTEREST|DIVIDEND/i, income: true, name: "Dividends & Interest"},
     {pattern: /CASHBACK|CASH BACK|REWARD/i, income: true, name: "Dividends & Interest"},
@@ -79,6 +83,8 @@ const KEYWORD_RULES: { pattern: RegExp, income: boolean, name: string }[] = [
 export const TRUSTED_CATEGORY = {
     needsReview: false,
     OR: [{categorizedBy: null}, {categorizedBy: {in: ["you", "history"]}}],
+    // A split's parts are in its lines, not in one category to suggest
+    category: {type: {in: ["income", "expense"]}},
 };
 
 export function needsReview(suggestion: CategorySuggestion) {

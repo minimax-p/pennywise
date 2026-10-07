@@ -17,6 +17,7 @@ import type {GetTransactionsHistoryResponseType} from "@/app/api/transactions/ro
 import {DateToUTCDate, ToDayString} from "@/lib/helpers";
 import {MAX_DATE_RANGE_DAYS} from "@/lib/constants";
 import {cn} from "@/lib/utils";
+import {classifyRow} from "@/lib/classify";
 
 type RangeId = "this-month" | "last-month" | "3-months" | "this-year" | "custom";
 type TypeFilter = "all" | "spent" | "got" | "moved" | "to-sort";
@@ -106,16 +107,16 @@ function TransactionsView() {
                 || t.description.toLowerCase().includes(term)
                 || t.category.name.toLowerCase().includes(term)
                 || (t.note ?? "").toLowerCase().includes(term)
+                || (t.person?.name ?? "").toLowerCase().includes(term)
+                || t.lines.some((l) => (l.category?.name ?? l.person?.name ?? "").toLowerCase().includes(term))
                 || t.amount.toFixed(2).includes(term.replace(/^[$-]/, "")))
         );
     }, [query.data, search, type, accountId]);
 
     // Spending and money in among what's shown; refunds lower spending
     const totals = useMemo(() => rows.reduce((sum, t) => {
-        if (t.type === "expense" && t.category.type === "expense") sum.spent += t.amount;
-        if (t.type === "income" && t.category.type === "expense") sum.spent -= t.amount;
-        if (t.type === "income" && t.category.type === "income") sum.income += t.amount;
-        return sum;
+        const {spending, income} = classifyRow(t);
+        return {spent: sum.spent + spending, income: sum.income + income};
     }, {spent: 0, income: 0}), [rows]);
 
     const chip = (active: boolean) => cn(
@@ -131,7 +132,7 @@ function TransactionsView() {
                 <div className="relative">
                     <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/>
                     <Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10"
-                           placeholder="Search places, notes, categories or amounts" aria-label="Search"/>
+                           placeholder="Search places, people, notes, categories or amounts" aria-label="Search"/>
                 </div>
                 <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4">
                     {RANGES.map((r) => (

@@ -99,8 +99,15 @@ const categories = [
     {name: "Ride-Share Driving", icon: "🚗", type: "income", tag: "Income"},
     {name: "Streaming Income", icon: "🎮", type: "income", tag: "Income"},
 
+    // Money matters
+    {name: "Fees & interest", icon: "🧾", type: "expense", tag: "Money"},
+    // Cash that left your wallet without being logged, found by counting it
+    {name: "Untracked cash", icon: "💵", type: "expense", tag: "Money"},
+
     // Money moved between your own accounts. Not counted as income or spending.
     {name: "Transfer", icon: "🔁", type: "transfer", tag: null},
+    // A transaction divided between categories and people; its lines say how
+    {name: "Split", icon: "✂️", type: "split", tag: null},
 
     // Fallback for transactions whose category was deleted or could not be matched
     {name: "Unsorted", icon: "❓", type: "expense", tag: null},

@@ -8,60 +8,42 @@ import {
     DeleteTransactionSchema,
     DeleteTransactionSchemaType,
     EditTransactionSchema,
-    EditTransactionSchemaType
+    EditTransactionSchemaType,
+    SaveEntrySchema,
+    SaveEntrySchemaType,
 } from "@/schema/transaction";
-import {currentUser} from "@/lib/auth";
-import {redirect} from "next/navigation";
+import {ActionResult, requireUser} from "@/lib/actionResult";
 import prisma from "@/lib/prisma";
 import {assertOwnAccounts, getTransferCategory} from "@/lib/accounts";
-import {payeeKey} from "@/lib/payee";
+import {EntryError, saveEntry} from "@/lib/entries";
 
-// The user's own category wins over a universal one with the same name
-async function findCategory(userId: string, name: string, type: string) {
-    const categories = await prisma.category.findMany({
-        where: {
-            name,
-            type,
-            OR: [
-                { userId },
-                { isUniversal: true }
-            ]
-        }
-    });
-    return categories.find((c) => c.userId === userId) ?? categories[0];
+// Money spent or received, new or edited, with an optional person and split
+export async function SaveEntry(form: SaveEntrySchemaType): Promise<ActionResult<{ id: string }>> {
+    const parsed = SaveEntrySchema.safeParse(form);
+    if (!parsed.success) return {ok: false, error: parsed.error.issues[0]?.message ?? "Check the form"};
+    const user = await requireUser();
+    const {id, ...entry} = parsed.data;
+    try {
+        const saved = await saveEntry(user.id, entry, id);
+        return {ok: true, data: {id: saved.id}};
+    } catch (error) {
+        if (error instanceof EntryError) return {ok: false, error: error.message};
+        throw error;
+    }
 }
 
 export async function CreateTransaction(form: CreateTransactionSchemaType) {
     const parsedBody = CreateTransactionSchema.safeParse(form);
-    if(!parsedBody.success) {
+    if (!parsedBody.success) {
         throw new Error(parsedBody.error.message);
     }
-    const user = await currentUser();
-    if(!user) {
-        redirect("/login");
-    }
-
+    const user = await requireUser();
     const {amount, category, categoryType, date, description, type, accountId, note} = parsedBody.data;
-    await assertOwnAccounts(user.id, [accountId]);
-
-    const categoryRow = await findCategory(user.id, category, categoryType ?? type);
-    if (!categoryRow) {
-        throw new Error("Category not found");
-    }
-
-    await prisma.transaction.create({
-        data: {
-            userId: user.id,
-            amount,
-            description: description || "",
-            date,
-            type,
-            categoryId: categoryRow.id,
-            accountId: accountId || null,
-            payeeKey: description ? payeeKey(description) : null,
-            categorizedBy: "you",
-            note,
-        }
+    await saveEntry(user.id, {
+        type, amount, date, note,
+        description: description || "",
+        accountId: accountId || null,
+        category: {name: category, type: categoryType ?? type},
     });
 }
 
@@ -71,10 +53,7 @@ export async function CreateTransfer(form: CreateTransferSchemaType) {
     if (!parsedBody.success) {
         throw new Error(parsedBody.error.message);
     }
-    const user = await currentUser();
-    if (!user) {
-        redirect("/login");
-    }
+    const user = await requireUser();
 
     const {amount, date, description, fromAccountId, toAccountId, note} = parsedBody.data;
     await assertOwnAccounts(user.id, [fromAccountId, toAccountId]);
@@ -95,26 +74,15 @@ export async function CreateTransfer(form: CreateTransferSchemaType) {
     });
 }
 
-// Imported and Apple Pay transactions keep the key from the bank's merchant name, so
-// renaming one ("Morning coffee") still teaches the category for that merchant
-function editedPayeeKey(existing: { source: string, payeeKey: string | null }, description?: string) {
-    if (existing.source !== "manual" && existing.payeeKey) return existing.payeeKey;
-    return description ? payeeKey(description) : null;
-}
-
 // Can also change the type, e.g. turn an imported card payment into a transfer
 export async function EditTransaction(form: EditTransactionSchemaType) {
     const parsedBody = EditTransactionSchema.safeParse(form);
     if (!parsedBody.success) {
         throw new Error(parsedBody.error.message);
     }
-    const user = await currentUser();
-    if (!user) {
-        redirect("/login");
-    }
+    const user = await requireUser();
 
     const {id, type, amount, category, categoryType, date, description, accountId, toAccountId, note} = parsedBody.data;
-
     const existing = await prisma.transaction.findFirst({where: {id, userId: user.id}});
     if (!existing) {
         throw new Error("Transaction not found");
@@ -122,33 +90,40 @@ export async function EditTransaction(form: EditTransactionSchemaType) {
     if (existing.type === "adjustment") {
         throw new Error("Balance adjustments can only be deleted");
     }
-    await assertOwnAccounts(user.id, [accountId, toAccountId]);
 
-    const categoryRow = type === "transfer"
-        ? await getTransferCategory()
-        : await findCategory(user.id, category!, categoryType ?? type);
-    if (!categoryRow) {
-        throw new Error("Category not found");
+    if (type !== "transfer") {
+        await saveEntry(user.id, {
+            type, amount, date, note,
+            description: description || "",
+            accountId: accountId || null,
+            category: {name: category!, type: categoryType ?? type},
+        }, id);
+        return;
     }
 
-    await prisma.transaction.update({
-        where: {id},
-        data: {
-            type,
-            amount,
-            date,
-            description: description || "",
-            categoryId: categoryRow.id,
-            accountId: accountId || null,
-            toAccountId: type === "transfer" ? toAccountId : null,
-            payeeKey: type === "transfer" ? null : editedPayeeKey(existing, description),
-            // Saving the edit counts as sorting it yourself
-            categorizedBy: type === "transfer" ? null : "you",
-            needsReview: false,
-            categoryConfidence: null,
-            note,
-        }
-    });
+    await assertOwnAccounts(user.id, [accountId, toAccountId]);
+    const transferCategory = await getTransferCategory();
+    await prisma.$transaction([
+        prisma.transactionLine.deleteMany({where: {transactionId: id}}),
+        prisma.transaction.update({
+            where: {id},
+            data: {
+                type,
+                amount,
+                date,
+                description: description || "",
+                categoryId: transferCategory.id,
+                accountId: accountId || null,
+                toAccountId,
+                payeeKey: null,
+                personId: null,
+                categorizedBy: null,
+                needsReview: false,
+                categoryConfidence: null,
+                note,
+            }
+        }),
+    ]);
 }
 
 export async function DeleteTransaction(form: DeleteTransactionSchemaType) {
@@ -156,10 +131,7 @@ export async function DeleteTransaction(form: DeleteTransactionSchemaType) {
     if (!parsedBody.success) {
         throw new Error(parsedBody.error.message);
     }
-    const user = await currentUser();
-    if (!user) {
-        redirect("/login");
-    }
+    const user = await requireUser();
 
     const existing = await prisma.transaction.findFirst({where: {id: parsedBody.data.id, userId: user.id}});
     if (!existing) {

@@ -1,21 +1,10 @@
 "use server";
 
-import {redirect} from "next/navigation";
+import {ActionResult, requireUser} from "@/lib/actionResult";
 import z from "zod";
-import {currentUser} from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import {jevEnabled} from "@/lib/categorize/jev";
 import {categorizationFields, suggestCategories} from "@/lib/categorize/suggest";
-
-type ActionResult<T> = { ok: true, data: T } | { ok: false, error: string };
-
-async function requireUser() {
-    const user = await currentUser();
-    if (!user) {
-        redirect('/login');
-    }
-    return user;
-}
 
 const SortSchema = z.object({
     id: z.string().min(1),

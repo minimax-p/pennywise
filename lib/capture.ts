@@ -1,6 +1,10 @@
 import {createHash, randomBytes} from "node:crypto";
+import {CaptureToken} from "@prisma/client";
+import prisma from "@/lib/prisma";
+import {clearFailures, isLockedOut, recordFailure} from "@/lib/loginThrottle";
 
-// Device keys for the Apple Pay shortcut. Keys are random, so a plain SHA-256 is enough to store them.
+// Device keys for the iPhone shortcuts (Apple Pay and Log a purchase). Keys are random, so a
+// plain SHA-256 is enough to store them.
 
 export function generateCaptureToken() {
     return `pw_${randomBytes(32).toString("base64url")}`;
@@ -35,3 +39,34 @@ export function parseShortcutDate(value: string | undefined | null): Date | null
     return new Date(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(),
         parsed.getHours(), parsed.getMinutes(), parsed.getSeconds()));
 }
+
+// Checks the device key on a shortcut request. Repeated bad keys from one address are locked out.
+export async function authenticateDevice(request: Request): Promise<{ key: CaptureToken } | { response: Response }> {
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+    const throttleKey = `capture:${ip}`;
+    if (isLockedOut(throttleKey)) {
+        return {response: Response.json({error: "Too many invalid keys. Try again later."}, {status: 429})};
+    }
+    const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+    const key = token ? await prisma.captureToken.findUnique({where: {tokenHash: hashCaptureToken(token)}}) : null;
+    if (!key) {
+        recordFailure(throttleKey);
+        return {response: Response.json({error: "Invalid or missing key"}, {status: 401})};
+    }
+    clearFailures(throttleKey);
+    return {key};
+}
+
+// "🛒 Groceries" as the shortcut shows it, or just "Groceries"
+export function categoryLabel(category: { icon: string, name: string }) {
+    return `${category.icon} ${category.name}`;
+}
+
+export function matchesCategoryLabel(category: { icon: string, name: string }, value: string) {
+    const wanted = value.trim().toLowerCase();
+    return category.name.toLowerCase() === wanted || categoryLabel(category).toLowerCase() === wanted;
+}
+
+// Choices in the "Log a purchase" shortcut that leave the category for the Sort page
+export const SORT_LATER = ["Sort later", "Split later"];
+export const NEW_PLACE = "New place…";

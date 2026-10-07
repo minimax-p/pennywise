@@ -9,6 +9,15 @@ export const transactionRowInclude = {
     plaidItem: {select: {institutionName: true}},
     account: {select: {name: true}},
     toAccount: {select: {name: true}},
+    person: {select: {id: true, name: true}},
+    lines: {
+        orderBy: {position: "asc"},
+        select: {
+            amount: true,
+            category: {select: {name: true, icon: true, type: true}},
+            person: {select: {id: true, name: true}},
+        },
+    },
 } satisfies Prisma.TransactionInclude;
 
 type TransactionWithRelations = Prisma.TransactionGetPayload<{ include: typeof transactionRowInclude }>;
@@ -37,6 +46,10 @@ export function toTransactionRow(transaction: TransactionWithRelations, formatte
             ? transaction.plaidItem?.institutionName ?? 'Bank'
             : null,
         needsReview: transaction.needsReview,
+        // Zelle or Venmo counterparty, or the person you picked
+        person: transaction.person,
+        // A split's parts: your shares by category, other people's shares
+        lines: transaction.lines,
     };
 }
 

@@ -38,7 +38,8 @@ function BalanceCheckSheet({account, open, onOpenChange}: Props) {
     const formatter = useCurrencyFormatter();
     const invalidate = useInvalidateMoney();
     const owes = account.type === "credit";
-    const bank = account.institution || "your bank";
+    const cash = account.type === "cash";
+    const bank = cash ? "your wallet" : account.institution || "your bank";
     const [amount, setAmount] = useState("");
     const [day, setDay] = useState(ToDayString(new Date()));
     const [result, setResult] = useState<BalanceCheckResult | null>(null);
@@ -57,9 +58,9 @@ function BalanceCheckSheet({account, open, onOpenChange}: Props) {
     };
 
     const check = useMutation({
-        mutationFn: async ({save, adjust}: { save: boolean, adjust?: boolean }) => {
+        mutationFn: async ({save, adjust, spend}: { save: boolean, adjust?: boolean, spend?: boolean }) => {
             const response = await CheckBalance({
-                accountId: account.id, balance: signed(), balanceDate: BalanceDateFromDay(day), save, adjust,
+                accountId: account.id, balance: signed(), balanceDate: BalanceDateFromDay(day), save, adjust, spend,
             });
             if (!response.ok) throw new Error(response.error);
             return response.data;
@@ -83,10 +84,11 @@ function BalanceCheckSheet({account, open, onOpenChange}: Props) {
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[440px]">
                 <DialogHeader>
-                    <DialogTitle>Check {account.name}</DialogTitle>
+                    <DialogTitle>{cash ? `Count your ${account.name.toLowerCase() === "cash" ? "cash" : account.name}` : `Check ${account.name}`}</DialogTitle>
                     <DialogDescription>
-                        {owes ? `How much does ${bank} say you owe?` : `What balance does ${bank} show?`} Use the current
-                        balance, not the available balance.
+                        {cash ? "How much cash is in your wallet right now?"
+                            : <>{owes ? `How much does ${bank} say you owe?` : `What balance does ${bank} show?`} Use the current
+                                balance, not the available balance.</>}
                     </DialogDescription>
                 </DialogHeader>
                 <form className="flex flex-col gap-4" onSubmit={(e) => {
@@ -95,7 +97,7 @@ function BalanceCheckSheet({account, open, onOpenChange}: Props) {
                 }}>
                     <div className="grid grid-cols-[1fr_auto] gap-3">
                         <div className="flex flex-col gap-2">
-                            <Label htmlFor="check-amount">{owes ? "You owe" : "Balance"}</Label>
+                            <Label htmlFor="check-amount">{owes ? "You owe" : cash ? "You have" : "Balance"}</Label>
                             <Input id="check-amount" inputMode="decimal" placeholder="0.00" autoFocus value={amount}
                                    className="h-14 font-display text-2xl"
                                    onChange={(e) => {
@@ -131,7 +133,31 @@ function BalanceCheckSheet({account, open, onOpenChange}: Props) {
                         </div>
                     )}
 
-                    {result && !matches && (
+                    {result && !matches && cash && result.difference < 0 && (
+                        <div className="flex flex-col gap-3">
+                            <div className="flex gap-3 rounded-3xl bg-sun-soft p-4">
+                                <span className="text-2xl" role="img" aria-hidden>💵</span>
+                                <div className="flex flex-col gap-1 text-sm">
+                                    <span className="text-base font-extrabold">
+                                        {formatter.format(Math.abs(result.difference))} less than expected
+                                    </span>
+                                    <span>Pennywise expected {formatter.format(result.expected)}. Probably spent on something you didn&apos;t log.</span>
+                                </div>
+                            </div>
+                            <Button type="button" disabled={check.isPending} onClick={() => check.mutate({save: true, spend: true})}>
+                                Count {formatter.format(Math.abs(result.difference))} as cash spending
+                            </Button>
+                            <Button type="button" variant="outline" disabled={check.isPending}
+                                    onClick={() => check.mutate({save: true, adjust: true})}>
+                                Just fix the balance
+                            </Button>
+                            <p className="text-xs text-muted-foreground">
+                                Cash spending shows up in your spending as Untracked cash. Fixing the balance doesn&apos;t count as spending.
+                            </p>
+                        </div>
+                    )}
+
+                    {result && !matches && !(cash && result.difference < 0) && (
                         <div className="flex flex-col gap-3">
                             <div className="flex gap-3 rounded-3xl bg-destructive/10 p-4">
                                 <TriangleAlert className="h-7 w-7 shrink-0 text-destructive"/>

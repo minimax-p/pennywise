@@ -88,7 +88,7 @@ describe.skipIf(!testDatabaseUrl)("server actions", () => {
         it("only accepts categories of the transaction's type", async () => {
             await expect(CreateTransaction({
                 amount: 20, category: "Salary", type: "expense", date: new Date(),
-            })).rejects.toThrow("Category not found");
+            })).rejects.toThrow("There is no category called Salary");
         });
 
         it("cannot edit or delete another user's transaction", async () => {

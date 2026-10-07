@@ -6,6 +6,7 @@ import TransactionSheet, {useCurrencyFormatter} from "@/app/(dashboard)/_compone
 import type {TransactionRow} from "@/lib/transactionRows";
 import {dayHeading, formatSigned} from "@/lib/money";
 import {cn} from "@/lib/utils";
+import {classifyRow} from "@/lib/classify";
 
 // A transaction as one tappable row. With `effect` (the change to one account) the amount
 // is signed for that account and `runningBalance` shows the balance after it.
@@ -14,14 +15,25 @@ export type ListRow = TransactionRow & { effect?: number, runningBalance?: numbe
 function kindOf(row: TransactionRow) {
     if (row.type === "transfer") return "move";
     if (row.type === "adjustment") return "adjustment";
-    if (row.type === "income") return row.category.type === "expense" ? "refund" : "income";
+    if (row.type === "income") return classifyRow(row).income > 0 ? "income" : "refund";
     return row.category.type === "income" ? "giveback" : "spend";
+}
+
+// "Groceries, Household, Alex" for a split; "Paid back by Alex" when it's all someone's share
+export function splitLabel(row: Pick<TransactionRow, "type" | "lines">) {
+    const people = row.lines.filter((l) => l.person).map((l) => l.person!.name);
+    if (people.length > 0 && people.length === row.lines.length && new Set(people).size === 1) {
+        return row.type === "income" ? `Paid back by ${people[0]}` : `Covered ${people[0]}`;
+    }
+    return "Split: " + row.lines.map((l) => l.category?.name ?? l.person?.name).join(", ");
 }
 
 function subtitle(row: TransactionRow) {
     if (row.type === "transfer") return `${row.accountName ?? "?"} → ${row.toAccountName ?? "?"}`;
     if (row.type === "adjustment") return `Balance adjustment · ${row.accountName ?? row.toAccountName ?? ""}`;
-    return [row.category.name, row.accountName].filter(Boolean).join(" · ");
+    const what = row.lines.length > 0 ? splitLabel(row) : row.category.name;
+    const who = row.person && !what.includes(row.person.name) ? row.person.name : null;
+    return [what, who, row.accountName].filter(Boolean).join(" · ");
 }
 
 export function TransactionItem({row, onOpen, showDate}: { row: ListRow, onOpen: (row: ListRow) => void, showDate?: boolean }) {
@@ -51,7 +63,7 @@ export function TransactionItem({row, onOpen, showDate}: { row: ListRow, onOpen:
                 <span className="truncate text-xs font-semibold text-muted-foreground">
                     {showDate && `${new Date(row.date).toLocaleDateString(undefined, {timeZone: "UTC", month: "short", day: "numeric"})} · `}
                     {subtitle(row)}
-                    {kind === "refund" && " · money back"}
+                    {kind === "refund" && row.lines.length === 0 && " · money back"}
                 </span>
                 {row.note && (
                     <span className="mt-1 flex max-w-full items-center gap-1 self-start rounded-xl rounded-bl-sm bg-secondary px-2 py-0.5 text-xs font-semibold">

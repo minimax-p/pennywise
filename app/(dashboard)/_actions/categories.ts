@@ -57,23 +57,19 @@ export async function DeleteCategory(form: DeleteCategorySchemaType) {
 
     const unsortedCategory = await GetOrCreateUnsortedCategory(parsedBody.data.type);
 
-    // Update all transactions to use the Unsorted category
-    await prisma.transaction.updateMany({
-        where: {
-            userId: user.id,
-            categoryId: categoryToDelete.id
-        },
-        data: {
-            categoryId: unsortedCategory.id
-        }
-    });
-
-    // Delete the category
-    return prisma.category.delete({
-        where: {
-            id: categoryToDelete.id
-        }
-    });
+    // Its transactions and split shares move to Unsorted and wait on the Sort page
+    const [, , deleted] = await prisma.$transaction([
+        prisma.transaction.updateMany({
+            where: {userId: user.id, categoryId: categoryToDelete.id},
+            data: {categoryId: unsortedCategory.id, needsReview: true},
+        }),
+        prisma.transactionLine.updateMany({
+            where: {categoryId: categoryToDelete.id},
+            data: {categoryId: unsortedCategory.id},
+        }),
+        prisma.category.delete({where: {id: categoryToDelete.id}}),
+    ]);
+    return deleted;
 }
 
 export async function EditCategory(form: EditCategorySchemaType) {

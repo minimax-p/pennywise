@@ -63,12 +63,13 @@ describe("bank formats", () => {
     });
 
     it("reads Venmo statements, skipping title lines, pending payments and bank-funded payments", () => {
-        const {mapping, rows, skipped} = importCsv("venmo.csv", "cash");
+        const {mapping, rows, skipped} = importCsv("venmo.csv", "wallet");
         expect(mapping.preset).toBe("venmo");
-        expect(rows.map((r) => [r.amount, r.description, r.externalId])).toEqual([
-            [-40, "Jane Seller: couch", "4001"],
-            [15, "Sam Friend: pizza split", "4002"],
-            [-12, "Sam Friend: tacos", "4003"],
+        // The person is the description and their note is the memo
+        expect(rows.map((r) => [r.amount, r.description, r.memo, r.person, r.externalId])).toEqual([
+            [-40, "Jane Seller", "couch", "Jane Seller", "4001"],
+            [15, "Sam Friend", "pizza split", "Sam Friend", "4002"],
+            [-12, "Sam Friend", "tacos", "Sam Friend", "4003"],
         ]);
         expect(rows[0].skipReason).toMatch(/Paid from Chase Debit/);
         expect(rows[1].skipReason).toBeNull();

@@ -1,6 +1,6 @@
 "use client";
 
-import React, {useState} from 'react';
+import React, {ReactNode, useState} from 'react';
 import {useQuery} from "@tanstack/react-query";
 import {Category} from "@prisma/client";
 import {Check, ChevronsUpDown} from "lucide-react";
@@ -25,9 +25,11 @@ interface Props {
     kind: TransactionType;
     value: PickedCategory | null;
     onChange: (value: PickedCategory) => void;
+    // Replaces the full-width button, e.g. with a "More…" chip
+    trigger?: ReactNode;
 }
 
-function CategoryPicker({kind, value, onChange}: Props) {
+function CategoryPicker({kind, value, onChange, trigger}: Props) {
     const [open, setOpen] = useState(false);
     const categoriesQuery = useAllCategories();
     const categories = Array.isArray(categoriesQuery.data) ? categoriesQuery.data : [];
@@ -46,7 +48,7 @@ function CategoryPicker({kind, value, onChange}: Props) {
     return (
         <Popover open={open} onOpenChange={setOpen} modal={true}>
             <PopoverTrigger asChild>
-                <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-semibold">
+                {trigger ?? <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-semibold">
                     {selected ? (
                         <span className="flex min-w-0 items-center gap-2">
                             <span role="img" className="text-lg">{selected.icon}</span>
@@ -57,7 +59,7 @@ function CategoryPicker({kind, value, onChange}: Props) {
                         </span>
                     ) : <span className="text-muted-foreground">Pick a category</span>}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50"/>
-                </Button>
+                </Button>}
             </PopoverTrigger>
             <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[280px] rounded-3xl border-2 p-0" align="start">
                 <Command className="rounded-3xl">

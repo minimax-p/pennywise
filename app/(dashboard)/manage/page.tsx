@@ -30,7 +30,7 @@ function Page() {
 
     return (
         <>
-            <PageHeader title="Manage" subtitle="Accounts, your name at the bank, the Apple Pay shortcut and categories"/>
+            <PageHeader title="Manage" subtitle="Accounts, your name at the bank, iPhone shortcuts and categories"/>
             <div className='container flex flex-col gap-4 py-3'>
                 <Card>
                     <CardHeader>
@@ -44,8 +44,8 @@ function Page() {
                 <SelfNamesCard settings={userSettingsQuery.data}/>
                 <Card>
                     <CardHeader>
-                        <CardTitle>Apple Pay shortcut</CardTitle>
-                        <CardDescription>Log Apple Pay purchases automatically as you pay</CardDescription>
+                        <CardTitle>iPhone shortcuts</CardTitle>
+                        <CardDescription>Log purchases without opening Pennywise</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <ApplePayShortcut/>

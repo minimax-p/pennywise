@@ -46,6 +46,7 @@ describe.skipIf(!testDatabaseUrl)("statement balances", () => {
     async function cleanUp() {
         await prisma.importedRow.deleteMany({where: {account: {userId}}});
         await prisma.transaction.deleteMany({where: {userId}});
+        await prisma.person.deleteMany({where: {userId}});
         await prisma.account.deleteMany({where: {userId}});
         await prisma.userSettings.deleteMany({where: {userId}});
     }
@@ -160,7 +161,7 @@ describe.skipIf(!testDatabaseUrl)("statement balances", () => {
         await commitImport(userId, chase, await planImport(userId, chase, rows), balances);
         const home = await getHome(userId, new Date(2026, 9, 7, 12));
 
-        expect(home.totals).toEqual({spendingMoney: 1451.58, savings: 5100, netWorth: 6551.58});
+        expect(home.totals).toEqual({spendingMoney: 1451.58, savings: 5100, owedToYou: 0, netWorth: 6551.58});
         expect(home.spendingParts.map((p) => [p.name, p.balance])).toEqual([["Chase checking", 1451.58], ["Discover", 0]]);
         expect(home.groups.map((g) => [g.id, g.total])).toEqual([["spending", 1451.58], ["credit", 0], ["savings", 5100]]);
         expect(home.month).toMatchObject({spent: 64.5, income: 30, lastMonthSoFar: 0, daysInMonth: 31});

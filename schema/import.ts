@@ -35,6 +35,7 @@ export const PlanRowSchema = z.object({
     linkTransactionId: z.string().nullable(),
     note: z.string().nullable(),
     memo: z.string().max(500).nullish(),
+    person: z.string().max(191).nullish(),
 })
 
 export const StatementBalanceSchema = z.object({

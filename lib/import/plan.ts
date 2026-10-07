@@ -5,11 +5,13 @@ import {fingerprintRows, StatementBalance, StatementRow} from "@/lib/import/pars
 import {categorizationFields, CategorySuggestion, suggestCategories} from "@/lib/categorize/suggest";
 import {getTransferCategory, intervalSummary, loadLedger} from "@/lib/accounts";
 import {CENT} from "@/lib/ledger";
-import {bankFromCode, isSelf, parseSelfNames, parseZelle} from "@/lib/import/zelle";
+import {bankFromCode, isSelf, mentionsSelf, parseSelfNames, parseZelle} from "@/lib/import/zelle";
+import {findOrCreatePerson} from "@/lib/people";
+import {rebalanceLines} from "@/lib/entries";
 
 // Decides what to do with each statement line before anything is saved:
 // - duplicate:  imported before (same line, or the same purchase from a CSV and a QFX file)
-// - match:      a transaction you entered by hand or via Apple Pay; the import fills in the bank's amount
+// - match:      a transaction you logged (by hand or with a shortcut); the import fills in the bank's amount
 // - transfer:   the other side of a transfer already recorded from the other account's statement
 // - pair:       an expense or income in another account that is really the other side of a transfer
 // - new:        a new expense, income or transfer
@@ -37,6 +39,8 @@ export type PlanRow = {
     note: string | null;
     // The bank's memo, saved as the transaction's note
     memo?: string | null;
+    // Who the money went to or came from, as the line names them (Zelle and Venmo)
+    person?: string | null;
 };
 
 const TRANSFER_WORDS = /\b(TRANSFER|XFER|PAYMENT|PYMT|PMT|E-PAYMENT|EPAYMENT|AUTOPAY|AUTO PAY|CASHOUT|CASH OUT|DEPOSIT FROM|WITHDRAWAL TO|THANK YOU)\b/i;
@@ -71,6 +75,38 @@ function guessTransferAccount(row: StatementRow, account: Account, others: Accou
         return others.find((other) => other.type === "checking") ?? null;
     }
     return null;
+}
+
+const ATM_WITHDRAWAL = /\bATM\b.*\bWITHDRAW|\bWITHDRAW\w*\b.*\bATM\b|\bCASH WITHDRAWAL\b/i;
+const CASH_DEPOSIT = /\bCASH DEPOSIT\b|\bATM\b.*\bDEPOSIT\b/i;
+
+// ATM withdrawals put cash in your wallet and cash deposits take it out. Returns the Cash
+// account (null when you don't have exactly one), or undefined for any other line.
+export function cashMove(row: Pick<StatementRow, "description" | "amount">, account: Account, others: Account[]): Account | null | undefined {
+    if (account.type !== "checking" && account.type !== "savings") return undefined;
+    const text = row.description;
+    if (/\bFEE\b|\bCHECK\b|\bCHEQUE\b/i.test(text)) return undefined;
+    const matches = row.amount < 0 ? ATM_WITHDRAWAL.test(text) : CASH_DEPOSIT.test(text);
+    if (!matches) return undefined;
+    const cash = others.filter((o) => o.type === "cash");
+    return cash.length === 1 ? cash[0] : null;
+}
+
+// Money moved between the bank and your own Venmo (or PayPal, Cash App) balance: the card
+// line names the service and you. Undefined for any other line.
+export function walletMove(row: Pick<StatementRow, "description">, others: Account[], selfNames: string[][]): Account | null | undefined {
+    const service = row.description.match(/\b(VENMO|PAYPAL|CASH ?APP)\b/i)?.[1];
+    if (!service || !mentionsSelf(row.description, selfNames)) return undefined;
+    const name = service.toLowerCase().replace(" ", "");
+    const wallets = others.filter((o) => o.type === "wallet"
+        && `${o.institution ?? ""} ${o.name}`.toLowerCase().replace(/cash app/g, "cashapp").includes(name));
+    return wallets.length === 1 ? wallets[0] : null;
+}
+
+// The other person on a Zelle line, unless it's you
+function zellePerson(description: string, selfNames: string[][]) {
+    const zelle = parseZelle(description);
+    return zelle && !isSelf(zelle.name, selfNames) ? zelle.name : null;
 }
 
 const sameBank = (a: Account, b: Account) =>
@@ -134,6 +170,7 @@ export async function planImport(userId: string, account: Account, rows: Stateme
             transferAccountId: null,
             linkTransactionId: null,
             memo: row.memo ?? null,
+            person: row.person ?? zellePerson(row.description, selfNames),
         };
 
         if (imported.has(fingerprints[i])) {
@@ -186,10 +223,10 @@ export async function planImport(userId: string, account: Account, rows: Stateme
             };
         }
 
-        // Entered by hand or by the Apple Pay shortcut; bank amounts can include a tip added later
+        // Logged by hand or with a shortcut; bank amounts can include a tip added later
         const candidates = nearby.filter((t) =>
             !used.has(t.id) && t.accountId === account.id && t.type !== "transfer" && !reconciledHere(t)
-            && (t.source === "manual" || t.source === "apple_pay")
+            && (t.source === "manual" || t.source === "apple_pay" || t.source === "shortcut")
             && (t.type === "income") === (row.amount > 0)
             && row.date.getTime() - t.date.getTime() >= -2 * DAY_MS
             && row.date.getTime() - t.date.getTime() <= 7 * DAY_MS);
@@ -220,6 +257,23 @@ export async function planImport(userId: string, account: Account, rows: Stateme
             };
         }
 
+        const cash = cashMove(row, account, others);
+        if (cash) {
+            return {
+                ...base, status: "new", include: true, kind: "transfer", category: null, transferAccountId: cash.id,
+                note: row.amount < 0 ? `ATM withdrawal: into ${cash.name}` : `Cash deposit: out of ${cash.name}`,
+            };
+        }
+        const wallet = walletMove(row, others, selfNames);
+        if (wallet !== undefined) {
+            return {
+                ...base, status: "new", include: true, kind: "transfer", category: null, transferAccountId: wallet?.id ?? null,
+                note: wallet
+                    ? `Moved ${row.amount < 0 ? "to" : "from"} your ${wallet.name}`
+                    : "Money moved with your own wallet: pick the account",
+            };
+        }
+
         const transferAccount = guessTransferAccount(row, account, others);
         if (transferAccount) {
             return {
@@ -229,7 +283,10 @@ export async function planImport(userId: string, account: Account, rows: Stateme
             };
         }
 
-        return {...base, status: "new", include: true, note: null};
+        return {
+            ...base, status: "new", include: true,
+            note: cash === null ? "ATM cash: add a Cash account on Manage to keep track of it" : null,
+        };
     });
 
     // Categories for every line, in case one is switched to income or expense in the
@@ -299,6 +356,8 @@ export async function commitImport(userId: string, account: Account, rows: PlanR
             const amount = Math.abs(row.amount);
             const createdAt = new Date(start + index);
             const note = row.memo || null;
+            const personId = row.person && row.kind !== "transfer"
+                ? (await findOrCreatePerson(tx, userId, row.person)).id : null;
             let transactionId: string;
 
             if (row.linkTransactionId) {
@@ -318,8 +377,14 @@ export async function commitImport(userId: string, account: Account, rows: PlanR
                     // The bank's amount and date are final (tips, holds)
                     await tx.transaction.update({
                         where: {id: existing.id},
-                        data: {amount, date, ...(note && !existing.note ? {note} : {})},
+                        data: {
+                            amount, date,
+                            ...(note && !existing.note ? {note} : {}),
+                            ...(personId && !existing.personId ? {personId} : {}),
+                        },
                     });
+                    // A tip on a split you logged goes to your own share
+                    await rebalanceLines(tx, existing.id, amount);
                 } else if (row.status === "pair") {
                     // The mirrored expense or income becomes one transfer between the two accounts
                     const otherId = existing.accountId!;
@@ -368,6 +433,7 @@ export async function commitImport(userId: string, account: Account, rows: PlanR
                         accountId: account.id,
                         payeeKey: payeeKey(row.description),
                         note,
+                        personId,
                         ...(pickedByYou
                             ? {categorizedBy: "you", needsReview: category === "Unsorted"}
                             : categorizationFields(row.suggestion!)),
