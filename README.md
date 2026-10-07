@@ -1,14 +1,18 @@
 # Pennywise
 
-A personal finance tracker for one person, meant to run on your own server. Track spending across your bank accounts and cards, import bank statements, log Apple Pay purchases automatically from your iPhone, and see totals, balances and history charts.
+A personal finance tracker for one person, meant to run on your own server. Every account and every dollar in one place: balances checked against your bank, statements imported and verified day by day, Apple Pay purchases logged from your iPhone, and a phone-first design.
 
 Built with Next.js 14 (App Router), Prisma with MySQL/MariaDB, TanStack Query, shadcn/ui and Recharts.
 
 ## Features
 
-- **Accounts:** checking, savings, credit cards and cash/wallets (like Venmo), each with a balance. The dashboard shows every balance plus your net worth.
+- **Home:** your *spending money* (cash and checking minus what your cards owe), savings and CDs, net worth, what needs attention, how this month's spending compares with last month, where it went, and recent activity. Balances are always as of today.
+- **Accounts:** checking, savings, CDs (with rate and maturity date), credit cards and cash/wallets (like Venmo). Each account has a page with a running balance after every line, like your bank's app.
+- **Balance checks:** type in what your bank shows, or import a statement that includes balances, and Pennywise tells you whether the transactions add up. An account's balance is its latest check plus the transactions after it, so importing older statements never shifts it, and a stretch that doesn't add up is pointed out to the day.
 - **Transfers:** money moved between your own accounts, such as paying the credit card from checking or moving money to savings. Transfers are not counted as income or spending, so a card purchase isn't counted a second time when you pay the bill.
 - **Statement import:** upload a CSV, QFX, OFX or QBO file downloaded from your bank and review a preview before anything is saved.
+  - Statement balances (Chase's Balance column, the balance in QFX files) are saved as balance checks and verified after the import.
+  - Zelle payments to or from your own name become transfers between your accounts.
   - Lines you have already imported are skipped.
   - Purchases you logged by hand or through Apple Pay are matched and updated with the bank's final amount, including tips.
   - Transfers are recognized from both accounts' statements.
@@ -16,10 +20,11 @@ Built with Next.js 14 (App Router), Prisma with MySQL/MariaDB, TanStack Query, s
 - **Apple Pay shortcut:** an iPhone Shortcuts automation logs each Apple Pay purchase the moment you pay, in the right account and category.
 - **Sort page:** every transaction Pennywise isn't sure about waits here with one-tap category suggestions. One tap can also sort every other waiting transaction from the same merchant, and your choices are remembered for next time.
 - **AI sorting with Jev (optional):** with a TypeSafe AI key, Jev picks categories for merchants you haven't sorted before. Confident answers are filed automatically and unsure ones go to the Sort page.
-- **Dashboard:** income, spending and balance for a date range, spending by category, and monthly or yearly history.
-- **Transactions:** search, filter by type or account, and edit or delete. Editing can also change the type, for example turning a card payment into a transfer.
+- **Spending that means something:** moving money between your accounts isn't spending or income. A refund, or a friend paying you back, filed under the spending category it was for lowers that spending instead of counting as income.
+- **Reports:** spending and money in by month or year, by category, with a chart and a table.
+- **Transactions:** every account in one list, grouped by day. Search descriptions, notes, categories and amounts, filter by kind, account or dates, and tap a line to edit or delete it.
 - **Login:** a single password. Wrong guesses are throttled, and the session cookie is signed.
-- **iPhone home screen:** add Pennywise to the home screen from Safari and it opens like an app.
+- **Made for the iPhone:** a bottom tab bar with a + button, sheets that slide up, big tap targets, and a soft dark mode that follows your phone. Add it to the home screen from Safari and it opens like an app.
 - **Optional Plaid bank sync:** shown only if you configure Plaid credentials.
 
 ## Running locally
@@ -80,8 +85,9 @@ These steps fit a small VPS such as a $6/month Vultr instance with 1 GB of RAM r
    ```
    The first build takes a few minutes. Then open `https://your-domain` and log in.
 
-5. **Update later.**
+5. **Update later.** Take a backup first when an update changes the database (the pull request says so), then:
    ```bash
+   docker compose exec db sh -c 'mariadb-dump -u pennywise -p"$MARIADB_PASSWORD" pennywise' | gzip > backups/before-update.sql.gz
    git pull && docker compose up -d --build
    ```
    Database migrations run automatically on every start.
@@ -113,17 +119,19 @@ gunzip -c backups/pennywise-2026-10-01.sql.gz | docker compose exec -T db sh -c 
 
 ### 1. Add your accounts
 
-On **Manage → Accounts**, add each account with its current balance, for example:
+On **Manage → Accounts**, add each account with the balance your bank shows today, for example:
 - Chase checking (Checking, bank Chase)
-- Discover it (Credit card, bank Discover)
-- Capital One savings (Savings, bank Capital One); add a separate account for each CD if you want to track it
-- Venmo (Cash or wallet, bank Venmo)
+- Discover it (Credit card, bank Discover, with what you owe)
+- Capital One savings (Savings, bank Capital One), and each CD with its rate and maturity date
+- Cash (Cash or wallet) and Venmo (Cash or wallet, bank Venmo)
 
 Filling in the **bank** name helps the importer recognize transfers, such as "DISCOVER E-PAYMENT" on your Chase statement. For cards you use with Apple Pay, enter the **Apple Wallet card name** exactly as Wallet shows it.
 
+Also fill in **Your name at the bank** on the Manage page, as it appears on Zelle lines ("Zelle payment to YOUR NAME"). Zelle payments to and from yourself are then imported as transfers between your accounts instead of spending and income.
+
 ### 2. Import statements
 
-Download a statement and upload it on **Import**. Prefer QFX when your bank offers it: every line has an id, so re-importing overlapping date ranges never creates duplicates.
+Download a statement and upload it on **Import**. For Chase checking, the CSV is the better choice: it includes the balance after every line, so Pennywise checks every day of the statement. Elsewhere QFX works best, because every line has an id, so re-importing overlapping date ranges never creates duplicates.
 
 | Bank | Where | Format |
 |---|---|---|
@@ -134,13 +142,19 @@ Download a statement and upload it on **Import**. Prefer QFX when your bank offe
 
 Venmo payments funded straight from a bank card are left out, because they already appear on that card's statement as "VENMO PAYMENT". Payments from your Venmo balance are imported. If the importer misreads a CSV (for example card purchases shown as income), use **Change columns** in the preview. Your choice is remembered for that account.
 
+After an import, Pennywise tells you whether the transactions add up to the statement's balances. If they don't, the account page shows the days where they stop adding up.
+
 ### 3. Log Apple Pay purchases automatically
 
 On **Manage → Apple Pay shortcut**, click **Set up the shortcut**. It creates a key and walks you through a Shortcuts automation on your iPhone that sends the amount, merchant and card of each Apple Pay purchase to Pennywise.
 
 The automation only sees Apple Pay taps: no online purchases typed in by card number, and no swipes of the physical card. Importing statements fills in the rest, and matches the purchases already logged instead of duplicating them.
 
-### 4. Sort what's left
+### 4. Check your balances now and then
+
+On an account's page, tap **Check balance** and type what your bank shows. If it matches, every transaction since the last check adds up. If not, Pennywise shows the difference and how many transactions came in since, so you can find the missing or different one. You can also save the bank's number with an **adjustment**, which makes the transactions add up without counting as spending. Home reminds you about accounts that haven't been checked in two weeks.
+
+### 5. Sort what's left
 
 Pennywise picks a category for each new transaction, trying in this order:
 1. what you chose before for the same merchant
@@ -155,7 +169,7 @@ Anything it isn't sure about goes to **Sort**, which shows a count in the menu a
 
 The category you pick is used the next time that merchant shows up, so the Sort page gets shorter over time.
 
-### 5. Add Pennywise to the home screen
+### 6. Add Pennywise to the home screen
 
 In Safari, open your Pennywise address, tap Share, then **Add to Home Screen**.
 
@@ -210,19 +224,23 @@ TEST_DATABASE_URL="mysql://user:password@localhost:3306/pennywise_test" npm test
 ```
 app/
   (auth)/login/           Password login
-  (dashboard)/            Dashboard, Transactions, Import and Manage pages
+  (dashboard)/            Home, Transactions, Accounts, Reports, Sort, Import and Manage pages
     _actions/             Server actions (transactions, accounts, categories, sorting, Apple Pay keys, Plaid)
-    _components/          Dashboard and Manage page components
+    _components/          Shared pieces: the add/edit sheet, transaction lists, Home, balance checks
     import/               Statement import page and actions
+    accounts/             Account list and account pages
+    reports/              Months and years
     review/               Sort page
-    transactions/         Transactions table and dialogs
+    transactions/         Every transaction in one list
   api/                    Route handlers the pages read from; api/capture is the Apple Pay endpoint
   wizard/                 First-run currency setup
 components/               Shared components and shadcn/ui
 lib/
   auth.ts, session.ts     Login session
-  accounts.ts             Account balances and transfers
-  history.ts              Keeps daily and monthly totals in step with transactions
+  ledger.ts               Balances, running balances and balance-check verification (no database)
+  accounts.ts             Loads ledgers; account groups for Home
+  reports.ts              Spending and income from transactions, by category, day and month
+  home.ts, accountPage.ts What Home and account pages show
   import/                 Statement parsing and matching
   categorize/             Category suggestions: your history, bank categories, keywords and Jev
   capture.ts              Apple Pay shortcut keys and card matching
@@ -234,4 +252,4 @@ tests/                    Vitest tests and sample statements
 Dockerfile, docker-compose.yml, Caddyfile   Deployment
 ```
 
-`MonthHistory` and `YearHistory` store running daily and monthly totals for the history chart. Every change to an income or expense goes through `applyHistoryChanges` in `lib/history.ts` so those totals stay correct. Transfers don't affect them.
+Balances come from `lib/ledger.ts`: an account's balance is its latest `BalanceCheck` plus the transactions dated after it, and each pair of neighbouring checks verifies the transactions between them. Reports are computed straight from transactions by `lib/reports.ts`; whether money counts as spending or income follows its category, so money back in a spending category lowers it.

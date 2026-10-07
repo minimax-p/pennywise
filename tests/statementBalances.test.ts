@@ -25,7 +25,7 @@ import {getHome} from "@/lib/home";
 import {getAccountPage} from "@/lib/accountPage";
 import {applyMapping, guessMapping, parseFile, statementBalances} from "@/lib/import/parse";
 import {commitImport, planImport, PlanRow} from "@/lib/import/plan";
-import {UpdateSelfNames} from "@/app/(dashboard)/_actions/settings";
+import {ConvertSelfZelle, UpdateSelfNames} from "@/app/(dashboard)/_actions/settings";
 
 function chaseStatement() {
     const parsed = parseFile(readFileSync("tests/fixtures/chase-checking-balances.csv", "utf8"));
@@ -134,6 +134,25 @@ describe.skipIf(!testDatabaseUrl)("statement balances", () => {
         expect(byDescription(plan, "Zelle payment to TEST USER")).toMatchObject({kind: "transfer", transferAccountId: null});
         // The sending bank's code still settles money received
         expect(byDescription(plan, "Zelle payment from TEST USER")).toMatchObject({transferAccountId: savings.id});
+    });
+
+    it("turns Zelle to yourself imported before your name was set into transfers", async () => {
+        await UpdateSelfNames("");
+        const {rows, balances} = chaseStatement();
+        await commitImport(userId, chase, await planImport(userId, chase, rows), balances);
+        const october = () => getTotals(userId, new Date("2026-10-01T00:00:00Z"), new Date("2026-10-31T23:59:59Z"));
+        // Counted as spending and income while your name was missing
+        expect(await october()).toEqual({spending: 264.5, income: 130});
+        expect(await ConvertSelfZelle(true)).toEqual({ok: false, error: "Add your name first"});
+
+        await UpdateSelfNames("Test User");
+        expect(await ConvertSelfZelle(true)).toEqual({ok: true, data: {converted: 2, skipped: 0}});
+        expect(await october()).toEqual({spending: 264.5, income: 130});
+        expect(await ConvertSelfZelle(false)).toEqual({ok: true, data: {converted: 2, skipped: 0}});
+        expect(await october()).toEqual({spending: 64.5, income: 30});
+        expect(await getBalance(chase)).toBe(1451.58);
+        expect(await getBalance(savings)).toBe(5000 - 100 + 200);
+        expect(await ConvertSelfZelle(true)).toEqual({ok: true, data: {converted: 0, skipped: 0}});
     });
 
     it("shows spending money, savings and this month on Home", async () => {

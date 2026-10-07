@@ -78,7 +78,7 @@ const sameBank = (a: Account, b: Account) =>
 
 // For a Zelle payment to or from yourself: the account on the other end, or null when it
 // could be more than one. Undefined when the line isn't one.
-function selfTransferAccount(row: StatementRow, account: Account, others: Account[], selfNames: string[][]): Account | null | undefined {
+export function selfTransferAccount(row: Pick<StatementRow, "description">, account: Account, others: Account[], selfNames: string[][]): Account | null | undefined {
     const zelle = parseZelle(row.description);
     if (!zelle || !isSelf(zelle.name, selfNames)) return undefined;
     // Zelle only reaches bank accounts
