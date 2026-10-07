@@ -10,7 +10,7 @@ function RootProviders({ children }: { children: ReactNode }) {
     const [queryClient] = useState(()=> new QueryClient({}))
     return (
     <QueryClientProvider client={queryClient}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
             {children}
         </ThemeProvider>
         <ReactQueryDevtools initialIsOpen={false} />

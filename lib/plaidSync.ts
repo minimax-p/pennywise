@@ -4,7 +4,6 @@ import prisma from "@/lib/prisma";
 import {getPlaidError, plaidClient} from "@/lib/plaid";
 import {decryptSecret} from "@/lib/crypto";
 import {convertPlaidTransaction} from "@/lib/plaidTransactions";
-import {applyHistoryChanges, HistoryChange} from "@/lib/history";
 import {TransactionType} from "@/lib/types";
 
 export type PlaidSyncResult = {
@@ -106,7 +105,6 @@ export async function syncPlaidItem(item: PlaidItem): Promise<PlaidSyncResult> {
     });
     const existingIds = new Set(existing.map((t) => t.plaidTransactionId));
 
-    const historyChanges: HistoryChange[] = [];
     const toDelete: string[] = [];
     const toUpdate: { id: string, data: { amount: number, date: Date, type: string, categoryId?: string } }[] = [];
     const toCreate: {
@@ -131,7 +129,6 @@ export async function syncPlaidItem(item: PlaidItem): Promise<PlaidSyncResult> {
             categorizedBy: converted.categoryName ? "plaid" : null,
             needsReview: !converted.categoryName,
         });
-        historyChanges.push({date: converted.date, type: converted.type, amount: converted.amount});
     }
 
     // Transactions the user deleted are not brought back. Updates only touch bank-owned fields,
@@ -142,7 +139,6 @@ export async function syncPlaidItem(item: PlaidItem): Promise<PlaidSyncResult> {
         const modified = modifiedById.get(plaidTransactionId);
         if (!removedIds.has(plaidTransactionId) && !modified) continue;
 
-        historyChanges.push({date: current.date, type: current.type, amount: -current.amount});
         const converted = modified && !removedIds.has(plaidTransactionId) ? convertPlaidTransaction(modified) : null;
         if (!converted) {
             toDelete.push(current.id);
@@ -158,7 +154,6 @@ export async function syncPlaidItem(item: PlaidItem): Promise<PlaidSyncResult> {
                 ...(converted.type !== current.type && {categoryId: categoryFor(converted.type, converted.categoryName).id}),
             },
         });
-        historyChanges.push({date: converted.date, type: converted.type, amount: converted.amount});
     }
 
     try {
@@ -181,7 +176,6 @@ export async function syncPlaidItem(item: PlaidItem): Promise<PlaidSyncResult> {
             if (toCreate.length > 0) {
                 await tx.transaction.createMany({data: toCreate});
             }
-            await applyHistoryChanges(tx, item.userId, historyChanges);
         }, {maxWait: 10_000, timeout: 60_000});
     } catch (error) {
         // The other sync imported the same changes

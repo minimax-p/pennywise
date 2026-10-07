@@ -35,17 +35,11 @@ import {decryptSecret, encryptSecret} from "@/lib/crypto";
 import {CreateTransaction, DeleteTransaction, EditTransaction} from "@/app/(dashboard)/_actions/transactions";
 import {CreateCategory, EditCategory} from "@/app/(dashboard)/_actions/categories";
 import {CreatePlaidLinkToken, ExchangePlaidPublicToken, UnlinkPlaidItem} from "@/app/(dashboard)/_actions/plaid";
+import {historyTotals} from "./reportHelpers";
 
 const userIds = [userId, otherUserId];
 
-async function history() {
-    const days = await prisma.monthHistory.findMany({where: {userId}, orderBy: [{month: "asc"}, {day: "asc"}]});
-    const months = await prisma.yearHistory.findMany({where: {userId}, orderBy: {month: "asc"}});
-    return {
-        days: days.filter((d) => d.income || d.expense).map(({month, day, income, expense}) => ({month, day, income, expense})),
-        months: months.filter((m) => m.income || m.expense).map(({month, income, expense}) => ({month, income, expense})),
-    };
-}
+const history = () => historyTotals(userId);
 
 describe.skipIf(!testDatabaseUrl)("server actions", () => {
     beforeEach(async () => {
@@ -53,16 +47,12 @@ describe.skipIf(!testDatabaseUrl)("server actions", () => {
         await prisma.transaction.deleteMany({where: {userId: {in: userIds}}});
         await prisma.plaidItem.deleteMany({where: {userId: {in: userIds}}});
         await prisma.category.deleteMany({where: {userId: {in: userIds}}});
-        await prisma.monthHistory.deleteMany({where: {userId: {in: userIds}}});
-        await prisma.yearHistory.deleteMany({where: {userId: {in: userIds}}});
     });
 
     afterAll(async () => {
         await prisma.transaction.deleteMany({where: {userId: {in: userIds}}});
         await prisma.plaidItem.deleteMany({where: {userId: {in: userIds}}});
         await prisma.category.deleteMany({where: {userId: {in: userIds}}});
-        await prisma.monthHistory.deleteMany({where: {userId: {in: userIds}}});
-        await prisma.yearHistory.deleteMany({where: {userId: {in: userIds}}});
         await prisma.$disconnect();
     });
 

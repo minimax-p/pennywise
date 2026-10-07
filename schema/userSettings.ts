@@ -11,3 +11,7 @@ export const UpdateUserCurrencySchema = z.object({
         return value;
     })
 });
+// Your name as banks print it on Zelle payments; several separated by commas
+export const UpdateSelfNamesSchema = z.object({
+    selfNames: z.string().trim().max(191).transform((v) => v || null),
+});

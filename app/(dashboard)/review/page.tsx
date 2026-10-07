@@ -4,21 +4,23 @@ import React, {useState} from 'react';
 import Link from "next/link";
 import {useMutation, useQuery, useQueryClient} from "@tanstack/react-query";
 import {toast} from "sonner";
-import {CheckCheck, Loader2, Pencil, Sparkles} from "lucide-react";
+import {CheckCheck, Loader2, Pencil, Sparkles, StickyNote} from "lucide-react";
+import PageHeader from "@/components/PageHeader";
+import PennyMark from "@/components/PennyMark";
 import SkeletonWrapper from "@/components/SkeletonWrapper";
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
-import {Checkbox} from "@/components/ui/checkbox";
+import {Switch} from "@/components/ui/switch";
 import CategoryPicker from "@/app/(dashboard)/_components/CategoryPicker";
-import EditTransactionDialog from "@/app/(dashboard)/transactions/_components/EditTransactionDialog";
+import TransactionSheet from "@/app/(dashboard)/_components/TransactionSheet";
 import {AcceptSuggestions, AskAiToSort, SortTransaction} from "@/app/(dashboard)/_actions/review";
 import type {GetReviewQueueResponseType} from "@/app/api/review/route";
+import {useInvalidateMoney} from "@/lib/client/useInvalidateMoney";
+import {dayFormatter} from "@/lib/money";
 import {TransactionType} from "@/lib/types";
 import {cn} from "@/lib/utils";
 
 type ReviewItem = GetReviewQueueResponseType["items"][number];
-
-const dayFormatter = new Intl.DateTimeFormat(undefined, {timeZone: 'UTC', month: 'short', day: 'numeric'});
 
 const SOURCE_LABELS: Record<string, string> = {
     manual: "Added by hand",
@@ -34,15 +36,9 @@ function useReviewQueue() {
     });
 }
 
-function useAfterSorting() {
-    const queryClient = useQueryClient();
-    return () => Promise.all(['review', 'transactions', 'overview'].map((key) =>
-        queryClient.invalidateQueries({queryKey: [key]})));
-}
-
 function ReviewPage() {
     const queue = useReviewQueue();
-    const afterSorting = useAfterSorting();
+    const invalidate = useInvalidateMoney();
     const items = queue.data?.items ?? [];
     const withSuggestion = items.filter((i) => i.category.name !== "Unsorted");
     // Jev answers each transaction once; asking again only helps new ones
@@ -55,7 +51,7 @@ function ReviewPage() {
             else toast.success(`Kept ${response.data.accepted} suggested categories`);
         },
         onError: () => toast.error("Could not save"),
-        onSettled: afterSorting,
+        onSettled: invalidate,
     });
 
     const askAi = useMutation({
@@ -74,55 +70,43 @@ function ReviewPage() {
             toast.success(`Jev sorted ${sorted} and suggested categories for ${suggested}. ${left} left to check.`, {id: 'ask-ai'});
         },
         onError: () => toast.error("AI sorting failed", {id: 'ask-ai'}),
-        onSettled: afterSorting,
+        onSettled: invalidate,
     });
 
     return (
         <>
-            <div className='border-b bg-card'>
-                <div className='container flex flex-wrap items-center justify-between gap-4 py-8'>
-                    <div>
-                        <p className='text-3xl font-bold'>Sort transactions</p>
-                        <p className='text-muted-foreground'>
-                            {queue.isLoading ? "Loading..." : queue.data?.total
-                                ? `${queue.data.total} to check. Tap the right category.`
-                                : "Everything is sorted."}
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        {queue.data?.aiEnabled && notAskedYet > 0 && (
-                            <Button variant="outline" className="gap-2" disabled={askAi.isPending} onClick={() => askAi.mutate()}>
-                                {askAi.isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <Sparkles className="h-4 w-4"/>}
-                                Ask Jev about {notAskedYet}
-                            </Button>
-                        )}
-                        {withSuggestion.length > 0 && (
-                            <Button className="gap-2" disabled={acceptAll.isPending} onClick={() => acceptAll.mutate()}>
-                                {acceptAll.isPending ? <Loader2 className="h-4 w-4 animate-spin"/> : <CheckCheck className="h-4 w-4"/>}
-                                Keep all {withSuggestion.length} suggestions
-                            </Button>
-                        )}
-                    </div>
-                </div>
-            </div>
-            <div className='container flex flex-col gap-3 py-6'>
-                {queue.data && !queue.data.aiEnabled && items.length > 0 && (
-                    <p className="text-sm text-muted-foreground">
-                        Tip: with a TypeSafe API key (TYPESAFE_API_KEY in the server&apos;s .env), Jev suggests categories
-                        for merchants you haven&apos;t sorted before.
-                    </p>
-                )}
+            <PageHeader title="Sort"
+                        subtitle={queue.isLoading ? "Loading..." : queue.data?.total
+                            ? `${queue.data.total} to check. Tap the right category.`
+                            : "Everything is sorted."}
+                        actions={
+                            <>
+                                {queue.data?.aiEnabled && notAskedYet > 0 && (
+                                    <Button variant="outline" disabled={askAi.isPending} onClick={() => askAi.mutate()}>
+                                        {askAi.isPending ? <Loader2 className="animate-spin"/> : <Sparkles/>}
+                                        Ask Jev about {notAskedYet}
+                                    </Button>
+                                )}
+                                {withSuggestion.length > 0 && (
+                                    <Button disabled={acceptAll.isPending} onClick={() => acceptAll.mutate()}>
+                                        {acceptAll.isPending ? <Loader2 className="animate-spin"/> : <CheckCheck/>}
+                                        Keep all {withSuggestion.length} suggestions
+                                    </Button>
+                                )}
+                            </>
+                        }/>
+            <div className="container flex flex-col gap-3 py-3">
                 <SkeletonWrapper isLoading={queue.isLoading}>
                     {items.length === 0 ? (
-                        <Card className="flex flex-col items-center gap-2 p-10 text-center">
-                            <CheckCheck className="h-10 w-10 text-emerald-500"/>
-                            <p className="text-lg font-semibold">All sorted</p>
+                        <Card className="flex flex-col items-center gap-3 p-10 text-center">
+                            <PennyMark className="h-20 w-20"/>
+                            <p className="font-display text-2xl font-bold">All sorted!</p>
                             <p className="text-sm text-muted-foreground">
-                                New transactions that need a category show up here. <Link href="/transactions" className="underline">See all transactions</Link>
+                                New transactions that need a category show up here. <Link href="/transactions" className="font-bold text-primary">See all transactions</Link>
                             </p>
                         </Card>
                     ) : (
-                        <div className="flex flex-col gap-3">
+                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                             {items.map((item) => <ReviewCard key={item.id} item={item}/>)}
                         </div>
                     )}
@@ -134,27 +118,28 @@ function ReviewPage() {
 
 function ReviewCard({item}: { item: ReviewItem }) {
     const [applyToMerchant, setApplyToMerchant] = useState(true);
-    const [showAll, setShowAll] = useState(false);
+    const [editing, setEditing] = useState(false);
     const queryClient = useQueryClient();
-    const afterSorting = useAfterSorting();
+    const invalidate = useInvalidateMoney();
 
     const sort = useMutation({
-        mutationFn: (category: string) => SortTransaction({id: item.id, category, applyToMerchant: applyToMerchant && item.sameMerchant > 0}),
-        onSuccess: (response, category) => {
+        mutationFn: ({category, categoryType}: { category: string, categoryType?: TransactionType }) =>
+            SortTransaction({id: item.id, category, categoryType, applyToMerchant: applyToMerchant && item.sameMerchant > 0}),
+        onSuccess: (response, {category}) => {
             if (!response.ok) {
                 toast.error(response.error);
                 return;
             }
-            // Drop the sorted cards right away; the refetch confirms
+            // Drop the sorted card right away; the refetch confirms
             queryClient.setQueryData<GetReviewQueueResponseType>(['review', 'queue'], (data) => data && {
                 ...data,
                 total: Math.max(0, data.total - response.data.sorted),
                 items: data.items.filter((i) => i.id !== item.id),
             });
-            if (response.data.sorted > 1) toast.success(`Sorted ${response.data.sorted} transactions as ${category}`);
+            toast.success(response.data.sorted > 1 ? `Sorted ${response.data.sorted} as ${category}` : `Sorted as ${category}`);
         },
         onError: () => toast.error("Could not save"),
-        onSettled: afterSorting,
+        onSettled: invalidate,
     });
 
     const income = item.type === "income";
@@ -163,51 +148,51 @@ function ReviewCard({item}: { item: ReviewItem }) {
         <Card className={cn("flex flex-col gap-3 p-4", sort.isPending && "opacity-60")}>
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <p className="truncate font-semibold">{item.description || "(no description)"}</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="truncate font-display text-lg font-semibold">{item.description || "(no description)"}</p>
+                    <p className="text-xs font-bold text-muted-foreground">
                         {[dayFormatter.format(new Date(item.date)), item.accountName, item.source ?? SOURCE_LABELS[item.entrySource]]
                             .filter(Boolean).join(" · ")}
                     </p>
                 </div>
-                <span className={cn("whitespace-nowrap font-mono", income ? "text-sky-500" : "text-amber-500")}>
-                    {income ? "+" : "-"}{item.formattedAmount}
+                <span className={cn("whitespace-nowrap font-display text-lg font-semibold money", income ? "text-income-ink" : "text-foreground")}>
+                    {income ? "+" : "−"}{item.formattedAmount}
                 </span>
             </div>
+            {item.note && (
+                <p className="flex items-center gap-1.5 self-start rounded-2xl rounded-bl-sm bg-secondary px-3 py-1.5 text-sm font-semibold">
+                    <StickyNote className="h-3.5 w-3.5 text-muted-foreground"/>{item.note}
+                </p>
+            )}
 
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2">
                 {item.choices.map((choice, index) => (
-                    <Button key={choice.name} size="sm" disabled={sort.isPending}
-                            variant={index === 0 && item.category.name !== "Unsorted" ? "default" : "secondary"}
-                            className="gap-1" onClick={() => sort.mutate(choice.name)}>
-                        <span role="img">{choice.icon}</span>
-                        {choice.name}
-                        {choice.probability !== null && (
-                            <span className="text-xs opacity-70">{Math.round(choice.probability * 100)}%</span>
-                        )}
-                    </Button>
+                    <button key={choice.name} type="button" disabled={sort.isPending}
+                            onClick={() => sort.mutate({category: choice.name})}
+                            className={cn("flex min-h-12 items-center gap-2 rounded-2xl border-2 px-3 py-2 text-left text-sm font-bold transition-transform active:translate-y-[2px]",
+                                index === 0 && item.category.name !== "Unsorted"
+                                    ? "border-primary bg-primary text-primary-foreground shadow-[0_3px_0_0_hsl(var(--primary-lip))]"
+                                    : "border-border bg-card shadow-[0_3px_0_0_hsl(var(--border))]")}>
+                        <span role="img" className="text-lg">{choice.icon}</span>
+                        <span className="min-w-0 flex-1 truncate">{choice.name}</span>
+                        {choice.probability !== null && <span className="text-xs opacity-70">{Math.round(choice.probability * 100)}%</span>}
+                    </button>
                 ))}
-                <Button size="sm" variant="ghost" onClick={() => setShowAll((v) => !v)}>
-                    {showAll ? "Fewer" : "Other category"}
+            </div>
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+                <CategoryPicker kind={item.type as TransactionType} value={null}
+                                onChange={(c) => sort.mutate({category: c.name, categoryType: c.type})}/>
+                <Button variant="outline" size="icon" aria-label="Edit, for example to mark it as a transfer" onClick={() => setEditing(true)}>
+                    <Pencil/>
                 </Button>
-                <EditTransactionDialog transaction={item} trigger={
-                    <Button size="sm" variant="ghost" className="gap-1" aria-label="Edit, e.g. mark as a transfer">
-                        <Pencil className="h-3 w-3"/>Edit
-                    </Button>
-                }/>
             </div>
 
-            {showAll && (
-                <div className="max-w-sm">
-                    <CategoryPicker type={item.type as TransactionType} onChange={(category) => sort.mutate(category)}/>
-                </div>
-            )}
-
             {item.sameMerchant > 0 && (
-                <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Checkbox checked={applyToMerchant} onCheckedChange={(checked) => setApplyToMerchant(checked === true)}/>
-                    Also sort {item.sameMerchant} more from this merchant
+                <label className="flex items-center justify-between gap-2 rounded-2xl bg-secondary px-3 py-2 text-sm font-semibold">
+                    Also sort {item.sameMerchant} more from this place
+                    <Switch checked={applyToMerchant} onCheckedChange={setApplyToMerchant}/>
                 </label>
             )}
+            <TransactionSheet open={editing} onOpenChange={setEditing} transaction={item}/>
         </Card>
     );
 }

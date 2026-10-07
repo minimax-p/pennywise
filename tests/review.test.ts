@@ -17,6 +17,7 @@ vi.mock("next/navigation", () => ({
 
 import {Account} from "@prisma/client";
 import prisma from "@/lib/prisma";
+import {historyTotals} from "./reportHelpers";
 import {StatementRow} from "@/lib/import/parse";
 import {commitImport, planImport} from "@/lib/import/plan";
 import {suggestCategories} from "@/lib/categorize/suggest";
@@ -39,8 +40,6 @@ describe.skipIf(!testDatabaseUrl)("sorting transactions", () => {
     async function cleanUp() {
         await prisma.importedRow.deleteMany({where: {account: {userId}}});
         await prisma.transaction.deleteMany({where: {userId}});
-        await prisma.monthHistory.deleteMany({where: {userId}});
-        await prisma.yearHistory.deleteMany({where: {userId}});
     }
 
     async function importRows(rows: StatementRow[]) {
@@ -120,8 +119,7 @@ describe.skipIf(!testDatabaseUrl)("sorting transactions", () => {
             ["OTHER PLACE", "Unsorted", true],
         ]);
         // The month totals are unchanged by sorting
-        const october = await prisma.yearHistory.findUniqueOrThrow({where: {month_year_userId: {userId, month: 9, year: 2026}}});
-        expect(october.expense).toBe(12);
+        expect((await historyTotals(userId)).months).toEqual([{month: 9, income: 0, expense: 12}]);
     });
 
     it("keeps all suggestions at once, except lines with no category yet", async () => {

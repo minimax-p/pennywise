@@ -1,32 +1,38 @@
 import type {Metadata, Viewport} from "next";
-import { GeistSans } from 'geist/font/sans';
-import { GeistMono } from 'geist/font/mono';
+import {Fredoka, Nunito} from "next/font/google";
 import "./globals.css";
 import RootProviders from "@/components/providers/RootProviders";
 import {Toaster} from "@/components/ui/sonner";
-import {Inter} from "next/font/google";
 import React, {ReactNode} from "react";
 
-const inter = Inter({subsets: ["latin"]});
+// Rounded, friendly type: Fredoka for headings and big numbers, Nunito for everything else
+const nunito = Nunito({subsets: ["latin"], variable: "--font-nunito", display: "swap"});
+const fredoka = Fredoka({subsets: ["latin"], variable: "--font-fredoka", display: "swap", weight: ["400", "500", "600", "700"]});
 
 export const metadata: Metadata = {
     title: "Pennywise",
-    description: "Simple personal finance app.",
-    appleWebApp: {capable: true, title: "Pennywise", statusBarStyle: "black"},
-    icons: {apple: "/apple-touch-icon.png"},
+    description: "Every account and every dollar in one place.",
+    appleWebApp: {capable: true, title: "Pennywise", statusBarStyle: "default"},
+    icons: {icon: "/icon.svg", apple: "/apple-touch-icon.png"},
 };
 
 export const viewport: Viewport = {
-    themeColor: "#000000",
+    // Lets the bottom tab bar sit above the iPhone home indicator
+    viewportFit: "cover",
+    themeColor: [
+        {media: "(prefers-color-scheme: light)", color: "#F8F7FC"},
+        {media: "(prefers-color-scheme: dark)", color: "#1C1B2B"},
+    ],
 };
 
-
-export default function RootLayout({children}: Readonly<{children: ReactNode }>) {
+export default function RootLayout({children}: Readonly<{ children: ReactNode }>) {
     return (
-        <html lang="en" className="dark selection:bg-amber-900 selection:text-amber-300" style={{colorScheme: "dark",}} suppressHydrationWarning>
-            <body className={`${GeistSans.variable} ${GeistMono.variable} ${inter.className}`}>
-                <Toaster richColors position="bottom-right" />
-                <RootProviders>{children}</RootProviders>
+        <html lang="en" className={`${nunito.variable} ${fredoka.variable}`} suppressHydrationWarning>
+            <body className="selection:bg-primary/25">
+                <RootProviders>
+                    {children}
+                    <Toaster richColors position="top-center"/>
+                </RootProviders>
             </body>
         </html>
     )

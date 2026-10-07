@@ -19,6 +19,7 @@ vi.mock("next/navigation", () => ({
 import {Account} from "@prisma/client";
 import prisma from "@/lib/prisma";
 import {getBalance} from "@/lib/accounts";
+import {getTotals} from "@/lib/reports";
 import {applyMapping, guessMapping, parseFile, StatementRow} from "@/lib/import/parse";
 import {commitImport, planImport, PlanRow} from "@/lib/import/plan";
 import {EditTransaction} from "@/app/(dashboard)/_actions/transactions";
@@ -36,16 +37,18 @@ const byDescription = (rows: PlanRow[], text: string) => {
 };
 
 async function monthTotals(month: number) {
-    const row = await prisma.yearHistory.findUnique({where: {month_year_userId: {userId, month, year: 2026}}});
-    return {income: row?.income ?? 0, expense: row?.expense ?? 0};
+    const {spending, income} = await getTotals(userId, new Date(Date.UTC(2026, month, 1)), new Date(Date.UTC(2026, month + 1, 1) - 1));
+    return {income, expense: spending};
 }
 
 describe.skipIf(!testDatabaseUrl)("statement import", () => {
     let chase: Account, discover: Account, savings: Account, venmo: Account;
     const balanceDate = new Date("2026-09-25T23:59:59.999Z");
 
-    async function account(name: string, type: string, institution: string, knownBalance: number) {
-        return prisma.account.create({data: {userId, name, type, institution, knownBalance, knownBalanceDate: balanceDate}});
+    async function account(name: string, type: string, institution: string, balance: number) {
+        return prisma.account.create({
+            data: {userId, name, type, institution, balanceChecks: {create: {date: balanceDate, balance, source: "you"}}},
+        });
     }
 
     beforeAll(async () => {
@@ -59,8 +62,6 @@ describe.skipIf(!testDatabaseUrl)("statement import", () => {
         await prisma.importedRow.deleteMany({where: {account: {userId}}});
         await prisma.transaction.deleteMany({where: {userId}});
         await prisma.account.deleteMany({where: {userId}});
-        await prisma.monthHistory.deleteMany({where: {userId}});
-        await prisma.yearHistory.deleteMany({where: {userId}});
         await prisma.$disconnect();
     });
 
@@ -73,7 +74,7 @@ describe.skipIf(!testDatabaseUrl)("statement import", () => {
         // Paying someone through Venmo from checking is spending, not a transfer to the Venmo balance
         expect(byDescription(plan, "VENMO PAYMENT")).toMatchObject({status: "new", kind: "expense"});
 
-        expect(await commitImport(userId, chase, plan)).toEqual({created: 4, linked: 0, skipped: 0});
+        expect(await commitImport(userId, chase, plan)).toEqual({created: 4, linked: 0, skipped: 0, statement: null});
         expect(await getBalance(chase)).toBe(1000 - 4.5 + 2500 - 300 - 40);
         expect(await getBalance(discover)).toBe(0);
         expect(await monthTotals(9)).toEqual({income: 2500, expense: 44.5});
@@ -87,8 +88,6 @@ describe.skipIf(!testDatabaseUrl)("statement import", () => {
                 type: "expense", source: "apple_pay", categoryId: unsorted.id, accountId: discover.id,
             },
         });
-        await prisma.monthHistory.create({data: {userId, year: 2026, month: 9, day: 6, income: 0, expense: 5.5}});
-        await prisma.yearHistory.update({where: {month_year_userId: {userId, month: 9, year: 2026}}, data: {expense: {increment: 5.5}}});
 
         const plan = await planImport(userId, discover, statement("discover.csv", discover));
         expect(byDescription(plan, "INTERNET PAYMENT")).toMatchObject({status: "transfer", kind: "transfer", transferAccountId: chase.id});
@@ -96,7 +95,7 @@ describe.skipIf(!testDatabaseUrl)("statement import", () => {
         expect(byDescription(plan, "SHELL")).toMatchObject({status: "new", category: "Gas"});
         expect(byDescription(plan, "BLUE BOTTLE")).toMatchObject({status: "match", linkTransactionId: applePay.id});
 
-        expect(await commitImport(userId, discover, plan)).toEqual({created: 2, linked: 2, skipped: 0});
+        expect(await commitImport(userId, discover, plan)).toEqual({created: 2, linked: 2, skipped: 0, statement: null});
 
         // The tip is now included and the history moved with it
         expect(await prisma.transaction.findUniqueOrThrow({where: {id: applePay.id}}))
@@ -114,7 +113,7 @@ describe.skipIf(!testDatabaseUrl)("statement import", () => {
 
         const qfx = await planImport(userId, chase, statement("chase.qfx", chase));
         expect(qfx.map((r) => r.status)).toEqual(["duplicate", "duplicate"]);
-        expect(await commitImport(userId, chase, again)).toEqual({created: 0, linked: 0, skipped: 4});
+        expect(await commitImport(userId, chase, again)).toEqual({created: 0, linked: 0, skipped: 4, statement: null});
     });
 
     it("records savings deposits from checking as transfers and interest as income", async () => {
@@ -167,7 +166,7 @@ describe.skipIf(!testDatabaseUrl)("statement import", () => {
             ["Sam Friend: pizza split", "new", true],
             ["Sam Friend: tacos", "new", true],
         ]);
-        expect(await commitImport(userId, venmo, plan)).toEqual({created: 2, linked: 0, skipped: 1});
+        expect(await commitImport(userId, venmo, plan)).toEqual({created: 2, linked: 0, skipped: 1, statement: null});
         expect(await getBalance(venmo)).toBe(20 + 15 - 12);
     });
 });

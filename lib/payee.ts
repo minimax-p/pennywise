@@ -1,3 +1,5 @@
+import {parseZelle} from "@/lib/import/zelle";
+
 // Turns bank descriptions like "SQ *BLUE BOTTLE COFFEE #123 OAKLAND CA" and
 // Apple Pay merchant names like "Blue Bottle Coffee" into comparable keys.
 
@@ -30,13 +32,22 @@ export function payeeTokens(description: string): string[] {
 }
 
 // The first two meaningful words, e.g. "BLUE BOTTLE". Null when there is nothing to go on.
+// Zelle payments are told apart by the person, e.g. "ZELLE TO SANG DAO", since "Zelle payment
+// to" alone would lump everyone you pay together.
 export function payeeKey(description: string): string | null {
+    const zelle = parseZelle(description);
+    if (zelle) {
+        const name = zelle.name.toUpperCase().split(/\s+/).map((w) => w.replace(/[^A-Z]/g, "")).filter(Boolean).slice(0, 2);
+        if (name.length > 0) return `ZELLE ${zelle.direction.toUpperCase()} ${name.join(" ")}`;
+    }
     const tokens = payeeTokens(description);
     return tokens.length > 0 ? tokens.slice(0, 2).join(" ") : null;
 }
 
 // True when two descriptions plausibly name the same merchant
 export function payeesSimilar(a: string, b: string): boolean {
+    // Zelle payments are only the same when they're with the same person
+    if (parseZelle(a) || parseZelle(b)) return payeeKey(a) === payeeKey(b);
     const [ta, tb] = [payeeTokens(a), payeeTokens(b)];
     if (ta.length === 0 || tb.length === 0) return false;
     return ta[0] === tb[0] || ta.join("").startsWith(tb.join("")) || tb.join("").startsWith(ta.join(""));

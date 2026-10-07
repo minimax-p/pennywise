@@ -10,6 +10,7 @@ const {testDatabaseUrl, userId} = vi.hoisted(() => {
 
 import {Account} from "@prisma/client";
 import prisma from "@/lib/prisma";
+import {historyTotals} from "./reportHelpers";
 import {findAccountForCard, generateCaptureToken, hashCaptureToken, parseShortcutDate} from "@/lib/capture";
 import {POST} from "@/app/api/capture/route";
 import {byMerchant, startFakeJev} from "./fakeJev";
@@ -66,8 +67,6 @@ describe.skipIf(!testDatabaseUrl)("POST /api/capture", () => {
         await prisma.transaction.deleteMany({where: {userId}});
         await prisma.captureToken.deleteMany({where: {userId}});
         await prisma.account.deleteMany({where: {userId}});
-        await prisma.monthHistory.deleteMany({where: {userId}});
-        await prisma.yearHistory.deleteMany({where: {userId}});
         await prisma.$disconnect();
     });
 
@@ -83,8 +82,7 @@ describe.skipIf(!testDatabaseUrl)("POST /api/capture", () => {
             amount: 4.5, type: "expense", source: "apple_pay", accountId: discover.id,
             date: new Date("2026-10-06T08:15:00Z"), payeeKey: "BLUE BOTTLE", needsReview: true,
         });
-        const day = await prisma.monthHistory.findUniqueOrThrow({where: {day_month_year_userId: {userId, day: 6, month: 9, year: 2026}}});
-        expect(day.expense).toBe(4.5);
+        expect((await historyTotals(userId)).days).toEqual([{month: 9, day: 6, income: 0, expense: 4.5}]);
         expect((await prisma.captureToken.findFirstOrThrow({where: {userId}})).lastUsedAt).not.toBeNull();
     });
 

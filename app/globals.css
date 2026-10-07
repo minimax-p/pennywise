@@ -2,79 +2,120 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: GeistSans, Helvetica, Arial, sans-serif;
-}
+/* Pennywise's look: soft, rounded and friendly. Light by default with a soft dark mode,
+   chunky buttons with a "lip" underneath, and one color per kind of money:
+   coral for spending, sky for income, lavender for moves between accounts. */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --background: 250 33% 98%;
+    --foreground: 245 18% 21%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 245 18% 21%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 10% 3.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --popover-foreground: 245 18% 21%;
+    /* Mint green, with a darker shade for button lips */
+    --primary: 150 58% 44%;
+    --primary-lip: 150 60% 34%;
+    --primary-foreground: 0 0% 100%;
+    --primary-soft: 150 60% 93%;
+    --secondary: 250 30% 95%;
+    --secondary-foreground: 245 18% 21%;
+    --muted: 250 30% 95%;
+    --muted-foreground: 246 9% 50%;
+    --accent: 250 40% 95%;
+    --accent-foreground: 245 18% 21%;
+    --destructive: 352 84% 64%;
+    --destructive-lip: 352 60% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 250 22% 90%;
+    --input: 250 22% 88%;
+    --ring: 150 58% 44%;
+    /* Kinds of money */
+    --spend: 12 100% 64%;
+    --spend-ink: 12 70% 46%;
+    --spend-soft: 14 100% 95%;
+    --income: 207 100% 61%;
+    --income-ink: 207 80% 40%;
+    --income-soft: 207 100% 95%;
+    --move: 248 87% 72%;
+    --move-ink: 248 50% 50%;
+    --move-soft: 248 100% 96%;
+    /* Things waiting for you */
+    --sun: 42 100% 62%;
+    --sun-ink: 36 85% 34%;
+    --sun-soft: 45 100% 92%;
+    /* The penny */
+    --coin: 36 90% 56%;
+    /* Chart marks, validated for colorblind separation on each theme's surface */
+    --chart-spend: 12 100% 64%;
+    --chart-income: 207 100% 61%;
+    --chart-1: 12 100% 64%;
+    --chart-2: 207 100% 61%;
+    --chart-3: 150 58% 44%;
+    --chart-4: 248 87% 72%;
+    --chart-5: 42 100% 62%;
+    --radius: 1rem;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 245 18% 21%;
+    --sidebar-primary: 150 58% 44%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 250 30% 95%;
+    --sidebar-accent-foreground: 245 18% 21%;
+    --sidebar-border: 250 22% 90%;
+    --sidebar-ring: 150 58% 44%;
   }
   .dark {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 245 22% 14%;
+    --foreground: 248 40% 96%;
+    --card: 245 20% 19%;
+    --card-foreground: 248 40% 96%;
+    --popover: 245 20% 19%;
+    --popover-foreground: 248 40% 96%;
+    --primary: 150 58% 52%;
+    --primary-lip: 150 62% 34%;
+    --primary-foreground: 150 60% 10%;
+    --primary-soft: 150 35% 22%;
+    --secondary: 245 18% 25%;
+    --secondary-foreground: 248 40% 96%;
+    --muted: 245 18% 25%;
+    --muted-foreground: 247 15% 70%;
+    --accent: 245 18% 26%;
+    --accent-foreground: 248 40% 96%;
+    --destructive: 352 84% 66%;
+    --destructive-lip: 352 55% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 245 16% 29%;
+    --input: 245 16% 32%;
+    --ring: 150 58% 52%;
+    --spend: 12 100% 68%;
+    --spend-ink: 14 100% 76%;
+    --spend-soft: 12 35% 24%;
+    --income: 207 100% 66%;
+    --income-ink: 207 100% 78%;
+    --income-soft: 207 35% 24%;
+    --move: 248 87% 76%;
+    --move-ink: 248 100% 85%;
+    --move-soft: 248 30% 27%;
+    --sun: 42 100% 62%;
+    --sun-ink: 44 100% 72%;
+    --sun-soft: 40 35% 22%;
+    --coin: 36 90% 58%;
+    --chart-spend: 12 79% 58%;
+    --chart-income: 207 74% 53%;
+    --chart-1: 12 100% 68%;
+    --chart-2: 207 100% 66%;
+    --chart-3: 150 58% 52%;
+    --chart-4: 248 87% 76%;
+    --chart-5: 42 100% 62%;
+    --sidebar-background: 245 20% 19%;
+    --sidebar-foreground: 248 40% 96%;
+    --sidebar-primary: 150 58% 52%;
+    --sidebar-primary-foreground: 150 60% 10%;
+    --sidebar-accent: 245 18% 25%;
+    --sidebar-accent-foreground: 248 40% 96%;
+    --sidebar-border: 245 16% 29%;
+    --sidebar-ring: 150 58% 52%;
   }
 }
 
@@ -82,17 +123,57 @@ body {
   * {
     @apply border-border;
   }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "tnum" 0;
+  }
+  h1, h2, h3 {
+    @apply font-display;
+    text-wrap: balance;
   }
   @layer utilities {
     .container {
       margin-right: auto;
       margin-left: auto;
-      padding-right: 2rem;
-      padding-left: 2rem;
-      max-width: none;
+      padding-right: 1rem;
+      padding-left: 1rem;
+      max-width: 72rem;
+    }
+    @media (min-width: 768px) {
+      .container {
+        padding-right: 2rem;
+        padding-left: 2rem;
+      }
     }
   }
 }
 
+@layer utilities {
+  /* Amounts line up in lists */
+  .money {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Room for the bottom tab bar and the iPhone home indicator */
+  .pb-tabbar {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  /* A soft 3D lip under chunky cards and buttons */
+  .lip {
+    box-shadow: 0 4px 0 0 hsl(var(--border));
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+}

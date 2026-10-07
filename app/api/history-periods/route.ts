@@ -1,36 +1,13 @@
 import {currentUser} from "@/lib/auth";
 import {redirect} from "next/navigation";
-import prisma from "@/lib/prisma";
+import {getHistoryYears} from "@/lib/reports";
 
-export async function GET(request: Request){
+export async function GET() {
     const user = await currentUser();
-    if (!user){
+    if (!user) {
         redirect('/login');
     }
-
-    const periods = await getHistoryPeriods(user.id);
-    return Response.json(periods);
+    return Response.json(await getHistoryYears(user.id));
 }
 
-export type GetHistoryPeriodsResponseType = Awaited<ReturnType<typeof getHistoryPeriods>>
-async function getHistoryPeriods(userId: string){
-    const result = await prisma.monthHistory.findMany({
-        where:{
-            userId,
-        },
-        select:{
-            year: true
-        },
-        distinct: ['year'],
-        orderBy:[
-            {year: 'asc'},
-        ]
-    })
-
-    const years = result.map(el=>el.year);
-    if (years.length === 0){
-        return [new Date().getFullYear()];
-    }
-
-    return years;
-}
+export type GetHistoryPeriodsResponseType = Awaited<ReturnType<typeof getHistoryYears>>

@@ -87,7 +87,7 @@ function CreateCategoryDialog({type, successCallBack, trigger}: Props) {
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>
-                        Create <span className={cn("m-1", type === 'income' ? "text-sky-500" : "text-amber-500")}>{type}</span> category
+                        Create <span className={cn("m-1", type === 'income' ? "text-income-ink" : "text-spend-ink")}>{type}</span> category
                     </DialogTitle>
                     <DialogDescription>Categories are used to group your transactions</DialogDescription>
                 </DialogHeader>

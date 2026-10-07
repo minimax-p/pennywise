@@ -3,7 +3,6 @@ import prisma from "@/lib/prisma";
 import {findAccountForCard, hashCaptureToken, parseShortcutDate} from "@/lib/capture";
 import {parseAmount} from "@/lib/import/parse";
 import {categorizationFields, suggestCategories} from "@/lib/categorize/suggest";
-import {applyHistoryChanges} from "@/lib/history";
 import {payeeKey} from "@/lib/payee";
 import {DateToUTCDate, GetFormatterForCurrency} from "@/lib/helpers";
 import {clearFailures, isLockedOut, recordFailure} from "@/lib/loginThrottle";
@@ -98,7 +97,6 @@ export async function POST(request: Request) {
                 ...fields,
             },
         });
-        await applyHistoryChanges(tx, userId, [{date, type: "expense", amount}]);
         await tx.captureToken.update({where: {id: key.id}, data: {lastUsedAt: new Date()}});
         return created;
     });

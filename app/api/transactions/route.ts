@@ -2,7 +2,7 @@ import {currentUser} from "@/lib/auth";
 import {redirect} from "next/navigation";
 import {OverviewQuerySchema} from "@/schema/overview";
 import prisma from "@/lib/prisma";
-import {GetFormatterForCurrency} from "@/lib/helpers";
+import {currencyFormatter, toTransactionRow, TransactionRow, transactionRowInclude} from "@/lib/transactionRows";
 
 export async function GET(request: Request) {
     const user = await currentUser();
@@ -11,59 +11,22 @@ export async function GET(request: Request) {
     }
 
     const {searchParams} = new URL(request.url);
-    const from = searchParams.get('from');
-    const to = searchParams.get('to');
-
-    const queryParams = OverviewQuerySchema.safeParse({from, to});
+    const queryParams = OverviewQuerySchema.safeParse({from: searchParams.get('from'), to: searchParams.get('to')});
     if (!queryParams.success) {
         return Response.json(queryParams.error.message, {status: 400});
     }
 
-    const transactions = await getTransactionsHistory(user.id, queryParams.data.from, queryParams.data.to);
-    return Response.json(transactions);
+    return Response.json(await getTransactionsHistory(user.id, queryParams.data.from, queryParams.data.to));
 }
 
-export type GetTransactionsHistoryResponseType = Awaited<ReturnType<typeof getTransactionsHistory>>
+export type GetTransactionsHistoryResponseType = TransactionRow[];
 
-async function getTransactionsHistory(userId: string, from: Date, to: Date) {
-    const userSettings = await prisma.userSettings.findUnique({where: {userId}});
-    const formatter = GetFormatterForCurrency(userSettings?.currency ?? 'USD');
-
+async function getTransactionsHistory(userId: string, from: Date, to: Date): Promise<TransactionRow[]> {
+    const formatter = await currencyFormatter(userId);
     const transactions = await prisma.transaction.findMany({
-        where: {
-            userId,
-            date: {
-                gte: from,
-                lte: to,
-            },
-        },
-        include: {
-            category: {select: {name: true, icon: true}},
-            plaidItem: {select: {institutionName: true}},
-            account: {select: {name: true}},
-            toAccount: {select: {name: true}},
-        },
+        where: {userId, date: {gte: from, lte: to}},
+        include: transactionRowInclude,
         orderBy: [{date: 'desc'}, {createdAt: 'desc'}],
     });
-
-    return transactions.map((transaction) => ({
-        id: transaction.id,
-        amount: transaction.amount,
-        formattedAmount: formatter.format(transaction.amount),
-        description: transaction.description,
-        date: transaction.date,
-        type: transaction.type,
-        category: transaction.category,
-        accountId: transaction.accountId,
-        accountName: transaction.account?.name ?? null,
-        // Transfers only
-        toAccountId: transaction.toAccountId,
-        toAccountName: transaction.toAccount?.name ?? null,
-        // manual, import, apple_pay or plaid
-        entrySource: transaction.source,
-        // Name of the bank it was imported from through Plaid, null otherwise
-        source: transaction.plaidTransactionId
-            ? transaction.plaidItem?.institutionName ?? 'Bank'
-            : null,
-    }));
+    return transactions.map((t) => toTransactionRow(t, formatter));
 }

@@ -1,13 +1,12 @@
-import React, { ReactNode } from "react";
-import Logo from "@/components/Logo";
+import React, {ReactNode} from "react";
 
-function layout({ children }: { children: ReactNode }) {
-  return (
-    <div className="relative flex h-screen w-full flex-col items-center justify-center">
-        <Logo/>
-        <div className="mt-12">{children}</div>
-    </div>
-  );
+function layout({children}: { children: ReactNode }) {
+    return (
+        <div className="relative flex min-h-dvh w-full flex-col items-center justify-center bg-background px-4">
+            {children}
+            <p className="mt-6 font-display text-lg font-bold text-muted-foreground">Pennywise</p>
+        </div>
+    );
 }
 
 export default layout;
