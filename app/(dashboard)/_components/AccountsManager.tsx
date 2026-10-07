@@ -33,10 +33,12 @@ function useInvalidateAccounts() {
 
 // Credit card balances are stored negative (money owed) but entered and shown as an amount owed
 export function formatBalance(account: { type: string, balance: number }, formatter: Intl.NumberFormat) {
+    // Avoid "-$0.00"
+    const balance = account.balance === 0 ? 0 : account.balance;
     if (account.type === 'credit') {
-        return account.balance <= 0 ? `${formatter.format(-account.balance)} owed` : `${formatter.format(account.balance)} credit`;
+        return balance <= 0 ? `${formatter.format(balance === 0 ? 0 : -balance)} owed` : `${formatter.format(balance)} credit`;
     }
-    return formatter.format(account.balance);
+    return formatter.format(balance);
 }
 
 function AccountsManager({currency}: { currency: string }) {

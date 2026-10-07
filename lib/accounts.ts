@@ -26,7 +26,8 @@ export async function getNetFlow(
 
 export async function getBalance(account: Account): Promise<number> {
     const balance = account.knownBalance + await getNetFlow(prisma, account.id, account.knownBalanceDate);
-    return Math.round(balance * 100) / 100;
+    // "+ 0" turns -0 into 0
+    return Math.round(balance * 100) / 100 + 0;
 }
 
 // Universal category that every transfer is filed under
