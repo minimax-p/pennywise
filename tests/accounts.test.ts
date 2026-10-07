@@ -29,6 +29,12 @@ async function cleanUp() {
     await prisma.yearHistory.deleteMany({where: {userId: {in: userIds}}});
 }
 
+async function created(promise: ReturnType<typeof CreateAccount>) {
+    const result = await promise;
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
+}
+
 async function balanceOf(id: string) {
     return getBalance(await prisma.account.findUniqueOrThrow({where: {id}}));
 }
@@ -49,8 +55,8 @@ describe.skipIf(!testDatabaseUrl)("accounts and transfers", () => {
     const sept = (day: number) => new Date(Date.UTC(2026, 8, day));
 
     it("tracks balances per account, with transfers moving money but not counting as spending", async () => {
-        const chase = await CreateAccount({name: "Chase checking", type: "checking", institution: "Chase", balance: 1000, balanceDate});
-        const discover = await CreateAccount({name: "Discover", type: "credit", institution: "Discover", balance: -200, balanceDate});
+        const chase = await created(CreateAccount({name: "Chase checking", type: "checking", institution: "Chase", balance: 1000, balanceDate}));
+        const discover = await created(CreateAccount({name: "Discover", type: "credit", institution: "Discover", balance: -200, balanceDate}));
 
         await CreateTransaction({amount: 50, category: "Groceries", type: "expense", date: sept(5), accountId: discover.id, description: "Market"});
         await CreateTransaction({amount: 2000, category: "Salary", type: "income", date: sept(15), accountId: chase.id});
@@ -65,7 +71,7 @@ describe.skipIf(!testDatabaseUrl)("accounts and transfers", () => {
     });
 
     it("ignores transactions dated on or before the entered balance", async () => {
-        const chase = await CreateAccount({name: "Chase checking", type: "checking", balance: 500, balanceDate});
+        const chase = await created(CreateAccount({name: "Chase checking", type: "checking", balance: 500, balanceDate}));
         await CreateTransaction({amount: 40, category: "Groceries", type: "expense", date: new Date("2026-08-28T00:00:00Z"), accountId: chase.id});
         await CreateTransaction({amount: 10, category: "Groceries", type: "expense", date: new Date("2026-09-01T00:00:00Z"), accountId: chase.id});
         expect(await balanceOf(chase.id)).toBe(500);
@@ -78,8 +84,8 @@ describe.skipIf(!testDatabaseUrl)("accounts and transfers", () => {
     });
 
     it("converts between expense and transfer, keeping history totals right", async () => {
-        const chase = await CreateAccount({name: "Chase checking", type: "checking", balance: 1000, balanceDate});
-        const discover = await CreateAccount({name: "Discover", type: "credit", balance: -300, balanceDate});
+        const chase = await created(CreateAccount({name: "Chase checking", type: "checking", balance: 1000, balanceDate}));
+        const discover = await created(CreateAccount({name: "Discover", type: "credit", balance: -300, balanceDate}));
 
         // Recorded as an expense by mistake, e.g. from a statement import
         await CreateTransaction({amount: 300, category: "General", type: "expense", date: sept(10), accountId: chase.id, description: "DISCOVER E-PAYMENT"});
@@ -100,7 +106,7 @@ describe.skipIf(!testDatabaseUrl)("accounts and transfers", () => {
     });
 
     it("rejects other users' accounts and transfers to the same account", async () => {
-        const mine = await CreateAccount({name: "Chase checking", type: "checking", balance: 0, balanceDate});
+        const mine = await created(CreateAccount({name: "Chase checking", type: "checking", balance: 0, balanceDate}));
         const theirs = await prisma.account.create({data: {userId: otherUserId, name: "Theirs", type: "checking"}});
 
         await expect(CreateTransaction({amount: 5, category: "Groceries", type: "expense", date: sept(1), accountId: theirs.id}))
@@ -109,17 +115,17 @@ describe.skipIf(!testDatabaseUrl)("accounts and transfers", () => {
             .rejects.toThrow("Account not found");
         await expect(CreateTransfer({amount: 5, date: sept(1), fromAccountId: mine.id, toAccountId: mine.id}))
             .rejects.toThrow();
-        await expect(CreateAccount({name: "Chase checking", type: "savings", balance: 0, balanceDate}))
-            .rejects.toThrow(/already exists/);
+        expect(await CreateAccount({name: "Chase checking", type: "savings", balance: 0, balanceDate}))
+            .toEqual({ok: false, error: 'An account named "Chase checking" already exists'});
     });
 
     it("only deletes accounts without transactions", async () => {
-        const used = await CreateAccount({name: "Chase checking", type: "checking", balance: 0, balanceDate});
-        const empty = await CreateAccount({name: "Old card", type: "credit", balance: 0, balanceDate});
+        const used = await created(CreateAccount({name: "Chase checking", type: "checking", balance: 0, balanceDate}));
+        const empty = await created(CreateAccount({name: "Old card", type: "credit", balance: 0, balanceDate}));
         await CreateTransaction({amount: 5, category: "Groceries", type: "expense", date: sept(1), accountId: used.id});
 
-        await expect(DeleteAccount({id: used.id})).rejects.toThrow(/Archive it instead/);
-        await DeleteAccount({id: empty.id});
+        expect(await DeleteAccount({id: used.id})).toEqual({ok: false, error: "This account has transactions. Archive it instead."});
+        expect(await DeleteAccount({id: empty.id})).toEqual({ok: true, data: null});
         expect(await prisma.account.count({where: {userId}})).toBe(1);
     });
 });

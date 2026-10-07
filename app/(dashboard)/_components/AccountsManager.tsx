@@ -120,7 +120,11 @@ function AccountFormDialog({account, trigger}: { account?: AccountRow, trigger: 
                 balanceDate: BalanceDateFromDay(day),
             });
         },
-        onSuccess: async () => {
+        onSuccess: async (response) => {
+            if (!response.ok) {
+                toast.error(response.error, {id: 'account-form'});
+                return;
+            }
             toast.success(account ? "Account updated" : `Added ${name}`, {id: 'account-form'});
             await invalidate();
             setOpen(false);
@@ -129,8 +133,8 @@ function AccountFormDialog({account, trigger}: { account?: AccountRow, trigger: 
                 setBalance("0");
             }
         },
-        onError: (error) => {
-            toast.error(error.message.includes("already exists") ? error.message : "Could not save the account", {id: 'account-form'});
+        onError: () => {
+            toast.error("Could not save the account", {id: 'account-form'});
         },
     });
 
@@ -276,7 +280,11 @@ function DeleteAccountDialog({account}: { account: AccountRow }) {
     const invalidate = useInvalidateAccounts();
     const mutation = useMutation({
         mutationFn: () => DeleteAccount({id: account.id}),
-        onSuccess: async () => {
+        onSuccess: async (response) => {
+            if (!response.ok) {
+                toast.error(response.error, {id: 'account-delete'});
+                return;
+            }
             toast.success(`Deleted ${account.name}`, {id: 'account-delete'});
             await invalidate();
         },

@@ -33,7 +33,7 @@ async function Page() {
                     <p className="text-3xl font-bold">
                         Welcome back{user.firstName ? `, ${user.firstName}` : ''}! 👋🏻
                     </p>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                         <CreateTransactionDialog trigger={<Button variant={"outline"} className="bg-[#C1EE9F] text-black hover:bg-sky-600 hover:text-white font-mono">
                             <CirclePlus />
                             Income

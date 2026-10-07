@@ -111,7 +111,7 @@ function CreateTransactionDialog({trigger, type}: Props) {
                                         <FormItem className="flex-1">
                                             <FormLabel>Amount</FormLabel>
                                             <FormControl>
-                                                <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                                                <Input type="number" step="0.01" inputMode="decimal" placeholder="0.00" {...field} />
                                             </FormControl>
                                             <FormDescription>Enter the transaction amount</FormDescription>
                                             <FormMessage />
