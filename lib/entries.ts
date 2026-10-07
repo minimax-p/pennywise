@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import {CENT, roundMoney} from "@/lib/ledger";
 import {payeeKey} from "@/lib/payee";
 import {findOrCreatePerson} from "@/lib/people";
+import {nameFields} from "@/lib/merchant";
 
 // Saving money spent or received ("entries"), with an optional person and an optional
 // split into your shares by category and other people's shares. Used by the Log sheet,
@@ -123,7 +124,7 @@ export async function saveEntry(userId: string, entry: EntryInput, id?: string, 
             type: entry.type,
             amount: roundMoney(entry.amount),
             date: entry.date,
-            description: entry.description,
+            ...nameFields(existing, entry.description),
             note: entry.note,
             accountId: entry.accountId,
             toAccountId: null,

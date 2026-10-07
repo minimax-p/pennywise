@@ -57,7 +57,7 @@ export function TransactionItem({row, onOpen, showDate}: { row: ListRow, onOpen:
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
                 <span className="flex items-center gap-1.5">
-                    <span className="truncate font-bold">{row.description || row.category.name}</span>
+                    <span className="truncate font-bold">{row.name || row.category.name}</span>
                     {row.needsReview && <span className="h-2 w-2 shrink-0 rounded-full bg-sun" title="Waiting on Sort"/>}
                 </span>
                 <span className="truncate text-xs font-semibold text-muted-foreground">

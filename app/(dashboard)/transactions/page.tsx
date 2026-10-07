@@ -105,6 +105,7 @@ function TransactionsView() {
             && (accountId === ALL || t.accountId === accountId || t.toAccountId === accountId)
             && (!term
                 || t.description.toLowerCase().includes(term)
+                || t.name.toLowerCase().includes(term)
                 || t.category.name.toLowerCase().includes(term)
                 || (t.note ?? "").toLowerCase().includes(term)
                 || (t.person?.name ?? "").toLowerCase().includes(term)

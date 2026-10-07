@@ -16,6 +16,7 @@ import {ActionResult, requireUser} from "@/lib/actionResult";
 import prisma from "@/lib/prisma";
 import {assertOwnAccounts, getTransferCategory} from "@/lib/accounts";
 import {EntryError, saveEntry} from "@/lib/entries";
+import {nameFields} from "@/lib/merchant";
 
 // Money spent or received, new or edited, with an optional person and split
 export async function SaveEntry(form: SaveEntrySchemaType): Promise<ActionResult<{ id: string }>> {
@@ -111,7 +112,7 @@ export async function EditTransaction(form: EditTransactionSchemaType) {
                 type,
                 amount,
                 date,
-                description: description || "",
+                ...nameFields(existing, description || ""),
                 categoryId: transferCategory.id,
                 accountId: accountId || null,
                 toAccountId,

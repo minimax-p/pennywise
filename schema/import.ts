@@ -27,9 +27,10 @@ export const PlanRowSchema = z.object({
     category: z.string().max(191).nullable(),
     suggestion: z.object({
         name: z.string().max(191),
-        source: z.enum(["history", "bank", "keyword", "ai", "none"]),
+        source: z.enum(["rule", "history", "bank", "keyword", "ai", "none"]),
         confidence: z.number().min(0).max(1).nullable(),
         alternatives: z.array(z.object({name: z.string().max(191), probability: z.number().min(0).max(1)})).max(10).nullable(),
+        rename: z.string().max(191).nullish(),
     }).nullable(),
     transferAccountId: z.string().nullable(),
     linkTransactionId: z.string().nullable(),

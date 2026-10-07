@@ -60,7 +60,7 @@ function formatDay(date: Date) {
 }
 
 // Another of the user's accounts that a transfer line seems to name
-function guessTransferAccount(row: StatementRow, account: Account, others: Account[]): Account | null {
+export function guessTransferAccount(row: Pick<StatementRow, "description" | "amount">, account: Account, others: Account[]): Account | null {
     if (!TRANSFER_WORDS.test(row.description)) return null;
     const text = row.description.toUpperCase();
     const named = others.find((other) => [other.institution, other.name]
@@ -293,7 +293,7 @@ export async function planImport(userId: string, account: Account, rows: Stateme
     // preview; only new income and expense lines are sent to Jev
     const suggestions = await suggestCategories(
         userId,
-        rows.map((row) => ({...row, accountName: account.name, accountType: account.type})),
+        rows.map((row, i) => ({...row, accountName: account.name, accountType: account.type, person: plan[i].person})),
         (i) => plan[i].status === "new" && plan[i].kind !== "transfer",
     );
     return plan.map((row, i) => row.linkTransactionId
@@ -434,6 +434,7 @@ export async function commitImport(userId: string, account: Account, rows: PlanR
                         payeeKey: payeeKey(row.description),
                         note,
                         personId,
+                        merchant: row.suggestion?.rename ?? null,
                         ...(pickedByYou
                             ? {categorizedBy: "you", needsReview: category === "Unsorted"}
                             : categorizationFields(row.suggestion!)),

@@ -18,6 +18,7 @@ import EditCategoryDialog from "@/app/(dashboard)/_components/EditCategoryDialog
 import LinkedAccounts from "@/app/(dashboard)/_components/LinkedAccounts";
 import AccountsManager from "@/app/(dashboard)/_components/AccountsManager";
 import ApplePayShortcut from "@/app/(dashboard)/_components/ApplePayShortcut";
+import RulesManager from "@/app/(dashboard)/_components/RulesManager";
 import {ConvertSelfZelle, UpdateSelfNames} from "@/app/(dashboard)/_actions/settings";
 import {useInvalidateMoney} from "@/lib/client/useInvalidateMoney";
 
@@ -30,7 +31,7 @@ function Page() {
 
     return (
         <>
-            <PageHeader title="Manage" subtitle="Accounts, your name at the bank, iPhone shortcuts and categories"/>
+            <PageHeader title="Manage" subtitle="Accounts, your name at the bank, rules, iPhone shortcuts and categories"/>
             <div className='container flex flex-col gap-4 py-3'>
                 <Card>
                     <CardHeader>
@@ -42,6 +43,15 @@ function Page() {
                     </CardContent>
                 </Card>
                 <SelfNamesCard settings={userSettingsQuery.data}/>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Rules</CardTitle>
+                        <CardDescription>How new transactions are filed and named, before anything else</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <RulesManager/>
+                    </CardContent>
+                </Card>
                 <Card>
                     <CardHeader>
                         <CardTitle>iPhone shortcuts</CardTitle>

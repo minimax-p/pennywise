@@ -90,6 +90,7 @@ export async function POST(request: Request) {
     }
     let fields: ReturnType<typeof categorizationFields> | { needsReview: boolean, categorizedBy: string | null } =
         {needsReview: false, categorizedBy: "you"};
+    let rename: string | null = null;
     if (!category && !later) {
         const [suggestion] = await suggestCategories(userId, [{
             date, amount: -amount, description: body.merchant, bankCategory: null,
@@ -97,6 +98,7 @@ export async function POST(request: Request) {
         }]);
         category = categories.find((c) => c.name === suggestion.name);
         if (category) fields = categorizationFields(suggestion);
+        rename = suggestion.rename ?? null;
     }
 
     const transaction = await prisma.$transaction(async (tx) => {
@@ -110,6 +112,7 @@ export async function POST(request: Request) {
                 categoryId: filed.id,
                 accountId: account?.id ?? null,
                 note: body.note || null,
+                merchant: rename,
                 ...fields,
             },
             include: {category: true},

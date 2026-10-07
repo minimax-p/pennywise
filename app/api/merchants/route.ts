@@ -1,6 +1,7 @@
 import {requireUser} from "@/lib/actionResult";
 import prisma from "@/lib/prisma";
 import {payeeKey} from "@/lib/payee";
+import {merchantName} from "@/lib/merchant";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export async function GET() {
         where: {userId: user.id, type: {in: ["income", "expense"]}, date: {gte: new Date(Date.now() - 365 * DAY_MS)}},
         orderBy: [{date: "desc"}, {createdAt: "desc"}],
         select: {
-            description: true, type: true, source: true, accountId: true, needsReview: true, payeeKey: true,
+            description: true, merchant: true, type: true, source: true, accountId: true, needsReview: true, payeeKey: true,
             category: {select: {name: true, type: true, icon: true}},
         },
         take: 3000,
@@ -33,7 +34,7 @@ export async function GET() {
 
     const merchants = new Map<string, Merchant & { logged: boolean }>();
     for (const t of transactions) {
-        const name = t.description.trim();
+        const name = merchantName(t).trim();
         if (!name) continue;
         const key = `${t.type}:${t.payeeKey ?? payeeKey(name) ?? name.toUpperCase()}`;
         const logged = t.source !== "import" && t.source !== "plaid";

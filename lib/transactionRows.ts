@@ -1,6 +1,7 @@
 import {Prisma} from "@prisma/client";
 import prisma from "@/lib/prisma";
 import {GetFormatterForCurrency} from "@/lib/helpers";
+import {merchantName} from "@/lib/merchant";
 
 // The fields every transaction list (Transactions, Home, account pages, Sort) shows
 
@@ -27,7 +28,10 @@ export function toTransactionRow(transaction: TransactionWithRelations, formatte
         id: transaction.id,
         amount: transaction.amount,
         formattedAmount: formatter.format(transaction.amount),
+        // The bank's text, or what you typed
         description: transaction.description,
+        // What to call it: your rename, a cleaned-up statement line, or what you typed
+        name: merchantName(transaction),
         note: transaction.note,
         date: transaction.date,
         // income, expense, transfer or adjustment

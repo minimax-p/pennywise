@@ -374,6 +374,7 @@ function SuggestionSource({row}: { row: PlanRow }) {
     const suggestion = row.suggestion;
     if (!suggestion || suggestion.name !== row.category) return null;
     const label = {
+        rule: "Your rule",
         history: "Like last time",
         bank: "From the bank's category",
         keyword: "From the description",

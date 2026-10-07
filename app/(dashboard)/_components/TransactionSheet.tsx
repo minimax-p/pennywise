@@ -137,7 +137,7 @@ function TransactionSheet({open, onOpenChange, kind: initialKind = "expense", tr
             setKind(k);
             setDigits(amountToCents(transaction.amount));
             setDay(new Date(transaction.date).toISOString().slice(0, 10));
-            setDescription(transaction.description);
+            setDescription(transaction.name);
             setNote(transaction.note ?? "");
             setShowNote(Boolean(transaction.note));
             setAccountId(transaction.accountId);
@@ -407,6 +407,9 @@ function TransactionSheet({open, onOpenChange, kind: initialKind = "expense", tr
                                     </button>
                                 ))}
                             </div>
+                        )}
+                        {transaction && transaction.name !== transaction.description && (
+                            <p className="truncate text-xs font-semibold text-muted-foreground">On the statement: {transaction.description}</p>
                         )}
                         {lastTime && (lastTime.accountId || lastTime.category) && (
                             <p className="text-xs font-semibold text-muted-foreground">

@@ -28,6 +28,7 @@ model Category {
   tag         String?
   Transaction Transaction[]
   lines       TransactionLine[]
+  rules       Rule[]
 
   @@unique([name, userId, type])
 }
@@ -53,6 +54,9 @@ model Transaction {
 
   // Zelle memo, Venmo note, statement memo or your own note
   note        String?  @db.VarChar(500)
+  // The name to show instead of the bank's description, when you or a rule renamed it.
+  // Without one, statement lines show a cleaned-up description (lib/merchant.ts).
+  merchant    String?
   // Who was on the other end: the Zelle or Venmo counterparty, or someone you picked
   personId    String?
   person      Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
@@ -198,6 +202,7 @@ model Person {
   updatedAt    DateTime          @updatedAt
   transactions Transaction[]
   lines        TransactionLine[]
+  rules        Rule[]
 
   @@unique([userId, name])
 }
@@ -219,4 +224,31 @@ model TransactionLine {
   @@index([transactionId])
   @@index([categoryId])
   @@index([personId])
+}
+
+// "Walmart is Groceries", "Description contains NETFLIX: Subscriptions", "Zelle to Dana Park is
+// Rent". Rules sort new transactions before anything else, the same way every time and
+// without leaving your server. Made with one tap on the Sort page, or on Manage.
+model Rule {
+  id         String    @id @default(uuid())
+  userId     String
+  // merchant: the same merchant as `pattern` (a payee key, see lib/payee.ts)
+  // contains: the description contains `pattern`, ignoring case
+  // person:   money to or from `personId`
+  kind       String
+  pattern    String?
+  personId   String?
+  person     Person?   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  // income or expense; null for both
+  direction  String?
+  // What the rule does: file under a category, show under a name, or both
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  rename     String?
+  // How the rule reads in lists, e.g. "Walmart"
+  label      String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId])
 }

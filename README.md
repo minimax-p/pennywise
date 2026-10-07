@@ -21,7 +21,9 @@ Built with Next.js 14 (App Router), Prisma with PostgreSQL, TanStack Query, shad
 - **People:** Zelle and Venmo payments are linked to the person on the line, with their notes in view. Splitting a bill adds up what each person owes you; when they pay you back it settles, without counting as income.
 - **Cash:** a Cash account works like any other. ATM withdrawals and cash deposits on your bank statement move money in and out of it, ATM and overdraft fees are filed as Fees & interest, and when you count your wallet, a shortfall can be counted as cash you spent without logging.
 - **iPhone shortcuts:** an automation logs each Apple Pay purchase the moment you pay, and **Log a purchase** asks four quick questions (how much, where, paid with, category) for card swipes and cash, from the Action button, Back Tap or Siri.
-- **Sort page:** every transaction Pennywise isn't sure about waits here with one-tap category suggestions. One tap can also sort every other waiting transaction from the same merchant, and your choices are remembered for next time.
+- **Sort, one card at a time:** every transaction Pennywise isn't sure about waits here, one card per merchant or person, so one swipe files all three Walmart runs. Swipe right to keep the suggestion, left for later, or tap a category; Undo takes it back. Zelle cards show the person and the note with a **paid me back** button, and ATM or card-payment lines that were filed as spending offer to become a move. On a computer: → keep, ← later, 1–4 pick, Z undo, E edit. An **Auto-sorted** tab shows what Pennywise filed by itself, to spot-check.
+- **Rules:** **Always file Walmart like this** on a Sort card makes a rule, and Walmart never waits on Sort again. Rules can also match text in the description or a person (Zelle to your landlord is Rent), and rename what they match. They're applied before anything else and never leave your server. Edit them on Manage.
+- **Readable names:** "WAL-MART #2131    MIDDLETOWN NY" shows as Walmart and "SQ *BLUE BOTTLE COFFEE 0412" as Blue Bottle Coffee. Rename any line; the bank's text is kept and shown under it.
 - **AI sorting with Jev (optional):** with a TypeSafe AI key, Jev picks categories for merchants you haven't sorted before. Confident answers are filed automatically and unsure ones go to the Sort page.
 - **Spending that means something:** moving money between your accounts isn't spending or income. A refund, or a friend paying you back, filed under the spending category it was for lowers that spending instead of counting as income.
 - **Reports:** spending and money in by month or year, by category, with a chart and a table.
@@ -193,17 +195,19 @@ On an account's page, tap **Check balance** and type what your bank shows. On th
 ### 5. Sort what's left
 
 Pennywise picks a category for each new transaction, trying in this order:
-1. what you chose before for the same merchant
-2. the category in the bank's export
-3. keywords such as PAYROLL or NETFLIX
-4. Jev, if it's turned on (see below)
+1. your rules
+2. what you chose before for the same merchant
+3. the category in the bank's export
+4. keywords such as PAYROLL or NETFLIX
+5. Jev, if it's turned on (see below)
 
-Anything it isn't sure about goes to **Sort**, which shows a count in the menu and a reminder on the dashboard.
-- Tap the right category, or **Other category** for the full list.
-- Leave **Also sort N more from this merchant** ticked to sort the rest of that merchant's waiting transactions at the same time.
-- **Edit** opens the full editor, for example to turn a line into a transfer.
+Anything it isn't sure about goes to **Sort**, which shows a count in the menu and a reminder on Home. Each card is one merchant or person:
+- Swipe right (or **Keep**) to file it under the highlighted suggestion, left (or **Later**) to come back to it.
+- Tap any category, or **Other category** for the full list. **Split or edit** opens the full editor.
+- Turn on **Always file … like this** before you pick, and a rule files that merchant or person the same way from now on.
+- Made a mistake? **Undo**, or the Undo in the message that pops up.
 
-The category you pick is used the next time that merchant shows up, so the Sort page gets shorter over time.
+The category you pick is also used the next time that merchant shows up, so the Sort page gets shorter over time.
 
 ### 6. Add Pennywise to the home screen
 
@@ -276,6 +280,8 @@ lib/
   reports.ts              Spending and income from transactions, by category, day and month
   entries.ts              Saving spending and income with a person and split lines
   people.ts, split.ts     People, what they owe you, and split arithmetic
+  rules.ts, merchant.ts   Rules, and readable merchant names
+  sortQueue.ts            The Sort page's cards, with undo in sortUndo.ts
   home.ts, accountPage.ts What Home and account pages show
   import/                 Statement parsing and matching
   categorize/             Category suggestions: your history, bank categories, keywords and Jev

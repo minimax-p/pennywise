@@ -1,15 +1,17 @@
 import prisma from "@/lib/prisma";
 import {payeeKey} from "@/lib/payee";
+import {loadRules, matchRule} from "@/lib/rules";
 import {Alternative, askJev, AUTO_ACCEPT_CONFIDENCE, CategoryOption, jevEnabled, JevContext, PastChoice} from "@/lib/categorize/jev";
 
 // Picks a category for new transactions, most trusted source first:
-// 1. what you chose before for the same merchant
-// 2. the category the bank put in its export
-// 3. keywords like PAYROLL or NETFLIX
-// 4. Jev, when TYPESAFE_API_KEY is set
+// 1. your rules
+// 2. what you chose before for the same merchant
+// 3. the category the bank put in its export
+// 4. keywords like PAYROLL or NETFLIX
+// 5. Jev, when TYPESAFE_API_KEY is set
 // Anything left is Unsorted and waits on the Sort page.
 
-export type CategorySource = "history" | "bank" | "keyword" | "ai" | "none";
+export type CategorySource = "rule" | "history" | "bank" | "keyword" | "ai" | "none";
 
 export type CategorySuggestion = {
     name: string;
@@ -18,6 +20,8 @@ export type CategorySuggestion = {
     confidence: number | null;
     // Jev's most likely categories, offered on the Sort page
     alternatives: Alternative[] | null;
+    // A rule's name for the merchant
+    rename?: string | null;
 };
 
 export type SuggestInput = {
@@ -28,6 +32,9 @@ export type SuggestInput = {
     bankCategory: string | null;
     accountName?: string | null;
     accountType?: string | null;
+    // The person on the line, for rules about people
+    person?: string | null;
+    personId?: string | null;
 };
 
 // Category names below are the universal categories from prisma/seed.mjs
@@ -82,7 +89,7 @@ const KEYWORD_RULES: { pattern: RegExp, income: boolean, name: string }[] = [
 // you never looked at can't spread to other transactions
 export const TRUSTED_CATEGORY = {
     needsReview: false,
-    OR: [{categorizedBy: null}, {categorizedBy: {in: ["you", "history"]}}],
+    OR: [{categorizedBy: null}, {categorizedBy: {in: ["you", "history", "rule"]}}],
     // A split's parts are in its lines, not in one category to suggest
     category: {type: {in: ["income", "expense"]}},
 };
@@ -156,17 +163,22 @@ export async function suggestCategories(
         }
     }
 
+    const rules = await loadRules(userId);
+
     const suggestions = inputs.map((input, i): CategorySuggestion => {
         const income = input.amount > 0;
-        const none = {confidence: null, alternatives: null};
+        const type = income ? "income" : "expense";
+        const rule = matchRule(rules, {description: input.description, type, person: input.person, personId: input.personId});
+        const none = {confidence: null, alternatives: null, rename: rule?.rename ?? null};
+        if (rule?.category && rule.category.type === type) return {name: rule.category.name, source: "rule", ...none};
         const fromHistory = keys[i] && learned.get(`${income ? "income" : "expense"}:${keys[i]}`);
         if (fromHistory) return {name: fromHistory, source: "history", ...none};
         if (!income && input.bankCategory) {
             const fromBank = BANK_CATEGORIES[input.bankCategory.trim().toUpperCase()];
             if (fromBank) return {name: fromBank, source: "bank", ...none};
         }
-        const rule = KEYWORD_RULES.find((r) => r.income === income && r.pattern.test(input.description));
-        if (rule) return {name: rule.name, source: "keyword", ...none};
+        const keyword = KEYWORD_RULES.find((r) => r.income === income && r.pattern.test(input.description));
+        if (keyword) return {name: keyword.name, source: "keyword", ...none};
         return {name: "Unsorted", source: "none", ...none};
     });
 
@@ -192,7 +204,10 @@ export async function suggestCategories(
                 const answer = answers[g];
                 if (!answer) return;
                 for (const i of indexes) {
-                    suggestions[i] = {name: answer.name, source: "ai", confidence: answer.confidence, alternatives: answer.alternatives};
+                    suggestions[i] = {
+                        name: answer.name, source: "ai", confidence: answer.confidence, alternatives: answer.alternatives,
+                        rename: suggestions[i].rename,
+                    };
                 }
             });
         }
