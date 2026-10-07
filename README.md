@@ -1,73 +1,168 @@
 # Pennywise
 
-A personal finance tracker. Log income and expenses by hand or import them from your bank through Plaid, sort them into categories, and see totals and history charts on a dashboard.
+A personal finance tracker for one person, meant to run on your own server. Track spending across your bank accounts and cards, import bank statements, log Apple Pay purchases automatically from your iPhone, and see totals, balances and history charts.
 
-Built with Next.js 14 (App Router), Clerk for sign-in, Prisma with MySQL, TanStack Query, shadcn/ui and Recharts.
+Built with Next.js 14 (App Router), Prisma with MySQL/MariaDB, TanStack Query, shadcn/ui and Recharts.
 
 ## Features
 
-- **Dashboard**: income, expense and balance for a date range (up to 90 days), spending by category, and a monthly or yearly history chart.
-- **Transactions**: a searchable table of transactions in a date range, filterable by type, with edit and delete.
-- **Bank import (Plaid)**: link bank accounts from the Manage page. Pennywise imports posted transactions, keeps them up to date when you press Sync, and lets you reconnect when a bank login expires or unlink a bank (optionally deleting what it imported).
-- **Categories**: about 80 shared categories, plus your own income and expense categories.
-- **Currency**: choose the currency used to display amounts.
+- **Accounts:** checking, savings, credit cards and cash/wallets (like Venmo), each with a balance. The dashboard shows every balance plus your net worth.
+- **Transfers:** money moved between your own accounts, such as paying the credit card from checking or moving money to savings. Transfers are not counted as income or spending, so a card purchase isn't counted a second time when you pay the bill.
+- **Statement import:** upload a CSV, QFX, OFX or QBO file downloaded from your bank and review a preview before anything is saved.
+  - Lines you have already imported are skipped.
+  - Purchases you logged by hand or through Apple Pay are matched and updated with the bank's final amount, including tips.
+  - Transfers are recognized from both accounts' statements.
+  - Categories are suggested from what you picked before for the same merchant.
+- **Apple Pay shortcut:** an iPhone Shortcuts automation logs each Apple Pay purchase the moment you pay, in the right account and category.
+- **Dashboard:** income, spending and balance for a date range, spending by category, and monthly or yearly history.
+- **Transactions:** search, filter by type or account, and edit or delete. Editing can also change the type, for example turning a card payment into a transfer.
+- **Login:** a single password. Wrong guesses are throttled, and the session cookie is signed.
+- **iPhone home screen:** add Pennywise to the home screen from Safari and it opens like an app.
+- **Optional Plaid bank sync:** shown only if you configure Plaid credentials.
 
-## Getting started
+## Running locally
 
-Requirements: Node.js 18.17 or newer and a MySQL 8 (or MariaDB 10.11+) database.
+Requirements: Node.js 18.17+ and MySQL 8 or MariaDB 10.11+.
 
 ```bash
 npm install
-cp .env.example .env      # then fill in the values, see below
-npm run db:migrate        # create the tables
-npm run db:seed           # add the shared categories
+cp .env.example .env
+node scripts/hash-password.mjs      # paste the output into PENNYWISE_PASSWORD_HASH
+openssl rand -base64 32             # paste into SESSION_SECRET
+# set DATABASE_URL to your local database
+npm run db:migrate
+npm run db:seed
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and sign up. On first sign-in you will be asked to pick a currency.
+Open http://localhost:3000 and enter your password.
 
-### Environment variables
+## Deploying to a server
 
-| Variable | Description |
-|---|---|
-| `DATABASE_URL` | MySQL connection string, e.g. `mysql://user:password@localhost:3306/pennywise` |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | From the [Clerk dashboard](https://dashboard.clerk.com) |
-| `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | `/sign-in` and `/sign-up` |
-| `PLAID_CLIENT_ID`, `PLAID_SECRET` | From the [Plaid dashboard](https://dashboard.plaid.com/developers/keys). Use the secret that matches `PLAID_ENV` |
-| `PLAID_ENV` | `sandbox` (default) or `production` |
-| `PLAID_COUNTRY_CODES` | Countries offered in Plaid Link, comma separated. Defaults to `US` |
-| `PLAID_TOKEN_ENCRYPTION_KEY` | 32-byte key that encrypts Plaid access tokens in the database. Generate with `openssl rand -base64 32`. Changing it makes existing bank links unusable, so they must be unlinked and linked again |
+These steps fit a small VPS such as a $6/month Vultr instance with 1 GB of RAM running Ubuntu. Docker Compose runs:
+- the app
+- MariaDB
+- Caddy, which gets and renews the HTTPS certificate
+- a backup job that dumps the database every day
 
-## Linking a bank account
+1. **Point a domain at the server.** Create a DNS `A` record for a domain or subdomain you own (for example `money.yourname.com`) pointing at the server's IP address.
 
-1. Go to **Manage → Link Your Bank Accounts** and click **Link a bank account**.
-2. In sandbox, pick any bank and sign in with username `user_good` and password `pass_good`.
-3. Pennywise imports the transactions Plaid has ready. Plaid keeps fetching older history (up to a year) in the background, so press **Sync** again later to pull in the rest and any new transactions.
+2. **Prepare the server.** SSH in, then install Docker, add swap (building the app needs more than 1 GB of memory) and open the firewall:
+   ```bash
+   curl -fsSL https://get.docker.com | sh
+   fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+   echo '/swapfile none swap sw 0 0' >> /etc/fstab
+   ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw allow 443/udp && ufw --force enable
+   ```
 
-How imported transactions are handled:
+3. **Get the code and configure it.**
+   ```bash
+   git clone https://github.com/minimax-p/pennywise.git && cd pennywise
+   cp .env.example .env
+   ```
+   Fill in `.env`:
+   - `DOMAIN`: your domain from step 1
+   - `DB_PASSWORD` and `DB_ROOT_PASSWORD`: each from `openssl rand -hex 24`
+   - `SESSION_SECRET`: from `openssl rand -base64 32`
+   - `TZ`: your time zone, e.g. `America/Los_Angeles`
+   - `PENNYWISE_NAME`: optional
 
-- Only posted transactions are imported. Pending ones show up once they post.
-- Transfers between your own accounts and credit card payments are skipped so the same money is not counted twice.
-- Each transaction is filed under a shared category based on Plaid's category, or under **Unsorted** when there is no match. The mapping is in `lib/plaidTransactions.ts`.
-- You can edit or delete imported transactions. Your description and category edits are kept on later syncs, but if the bank changes the amount or date, the next sync applies that change. Deleted transactions are not brought back.
-- Amounts are imported as they are. If your Pennywise currency differs from the bank account's currency, they are not converted.
+   Then create your password hash and paste it into `PENNYWISE_PASSWORD_HASH`:
+   ```bash
+   docker compose run --rm migrate node scripts/hash-password.mjs
+   ```
 
-Pennywise has no Plaid webhook endpoint, so new transactions arrive when you press Sync rather than automatically.
+4. **Start it.**
+   ```bash
+   docker compose up -d --build
+   ```
+   The first build takes a few minutes. Then open `https://your-domain` and log in.
+
+5. **Update later.**
+   ```bash
+   git pull && docker compose up -d --build
+   ```
+   Database migrations run automatically on every start.
+
+### Backups
+
+Every day the `backup` service writes `backups/pennywise-YYYY-MM-DD.sql.gz` next to `docker-compose.yml` and keeps two weeks of files. Copy them off the server now and then, for example from your Mac:
+
+```bash
+scp root@your-server:pennywise/backups/*.sql.gz ~/Documents/pennywise-backups/
+```
+
+Vultr's automatic backups or snapshots are a good second layer.
+
+To restore a backup:
+
+```bash
+gunzip -c backups/pennywise-2026-10-01.sql.gz | docker compose exec -T db sh -c 'mariadb -u pennywise -p"$MARIADB_PASSWORD" pennywise'
+```
+
+### Security notes
+
+- Use a long password, at least 12 characters (the hash script enforces that). After 5 wrong attempts, an IP address is locked out for 15 minutes.
+- Changing `SESSION_SECRET` logs out every session.
+- Caddy strips the `x-middleware-subrequest` header and adds HSTS and other security headers.
+- Apple Pay shortcut keys are stored as hashes. Revoke one on the Manage page if you lose the phone.
+
+## Getting your transactions in
+
+### 1. Add your accounts
+
+On **Manage → Accounts**, add each account with its current balance, for example:
+- Chase checking (Checking, bank Chase)
+- Discover it (Credit card, bank Discover)
+- Capital One savings (Savings, bank Capital One); add a separate account for each CD if you want to track it
+- Venmo (Cash or wallet, bank Venmo)
+
+Filling in the **bank** name helps the importer recognize transfers, such as "DISCOVER E-PAYMENT" on your Chase statement. For cards you use with Apple Pay, enter the **Apple Wallet card name** exactly as Wallet shows it.
+
+### 2. Import statements
+
+Download a statement and upload it on **Import**. Prefer QFX when your bank offers it: every line has an id, so re-importing overlapping date ranges never creates duplicates.
+
+| Bank | Where | Format |
+|---|---|---|
+| Chase | Account → Download account activity | QFX or CSV |
+| Discover | Activity → Download | QFX or CSV |
+| Capital One 360 | Account → Download Transactions | QFX or CSV |
+| Venmo | venmo.com → Statements → Download CSV | CSV |
+
+Venmo payments funded straight from a bank card are left out, because they already appear on that card's statement as "VENMO PAYMENT". Payments from your Venmo balance are imported. If the importer misreads a CSV (for example card purchases shown as income), use **Change columns** in the preview. Your choice is remembered for that account.
+
+### 3. Log Apple Pay purchases automatically
+
+On **Manage → Apple Pay shortcut**, click **Set up the shortcut**. It creates a key and walks you through a Shortcuts automation on your iPhone that sends the amount, merchant and card of each Apple Pay purchase to Pennywise.
+
+The automation only sees Apple Pay taps: no online purchases typed in by card number, and no swipes of the physical card. Importing statements fills in the rest, and matches the purchases already logged instead of duplicating them.
+
+### 4. Add Pennywise to the home screen
+
+In Safari, open your Pennywise address, tap Share, then **Add to Home Screen**.
+
+## Optional: Plaid bank sync
+
+Pennywise can also pull transactions through Plaid. The Plaid section on the Manage page only appears when `PLAID_CLIENT_ID` and `PLAID_SECRET` are set.
+- Plaid offers a free Trial plan for personal use in the US and Canada; check the terms on Plaid's site.
+- Set `PLAID_TOKEN_ENCRYPTION_KEY` (`openssl rand -base64 32`). Access tokens are stored encrypted with it.
 
 ## Scripts
 
 | Command | Description |
 |---|---|
-| `npm run dev` | Start the development server |
+| `npm run dev` | Development server |
 | `npm run build` / `npm start` | Production build and server |
-| `npm run lint` | ESLint (`next lint`) |
-| `npm test` | Unit tests with Vitest |
-| `npm run db:migrate` | Apply Prisma migrations |
+| `npm run lint` | ESLint |
+| `npm test` | Tests (see below) |
+| `npm run db:migrate` | Apply database migrations |
 | `npm run db:seed` | Add the shared categories (safe to run again) |
+| `node scripts/hash-password.mjs` | Print a password hash for `PENNYWISE_PASSWORD_HASH` |
 
-### Database tests
+### Tests
 
-The Plaid sync and server action tests need a real MySQL database. Point `TEST_DATABASE_URL` at a disposable database that has been migrated and seeded; without it those tests are skipped:
+`npm test` runs the unit tests. The database tests (import, accounts, Apple Pay capture, Plaid sync and server actions) run when `TEST_DATABASE_URL` points at a disposable database that has been migrated and seeded:
 
 ```bash
 DATABASE_URL="mysql://user:password@localhost:3306/pennywise_test" npm run db:migrate
@@ -79,23 +174,27 @@ TEST_DATABASE_URL="mysql://user:password@localhost:3306/pennywise_test" npm test
 
 ```
 app/
-  (auth)/                 Clerk sign-in and sign-up pages
-  (dashboard)/            Dashboard, Transactions and Manage pages
-    _actions/             Server actions (transactions, categories, Plaid)
+  (auth)/login/           Password login
+  (dashboard)/            Dashboard, Transactions, Import and Manage pages
+    _actions/             Server actions (transactions, accounts, categories, Apple Pay keys, Plaid)
     _components/          Dashboard and Manage page components
-    transactions/         Transactions page and its table and dialogs
-  api/                    Route handlers the pages read from
+    import/               Statement import page and actions
+    transactions/         Transactions table and dialogs
+  api/                    Route handlers the pages read from; api/capture is the Apple Pay endpoint
   wizard/                 First-run currency setup
-components/               Shared components, including PlaidLink and shadcn/ui
+components/               Shared components and shadcn/ui
 lib/
-  history.ts              Keeps the daily and monthly totals in step with transactions
-  plaid.ts                Plaid client
-  plaidSync.ts            Imports changes from Plaid /transactions/sync
-  plaidTransactions.ts    Converts and categorizes Plaid transactions
-  crypto.ts               Encrypts Plaid access tokens
+  auth.ts, session.ts     Login session
+  accounts.ts             Account balances and transfers
+  history.ts              Keeps daily and monthly totals in step with transactions
+  import/                 Statement parsing, matching and category suggestions
+  capture.ts              Apple Pay shortcut keys and card matching
+  payee.ts                Normalizes merchant names to recognize repeat merchants
+  plaid*.ts, crypto.ts    Optional Plaid sync
 prisma/                   Schema, migrations and the category seed
-schema/                   Zod schemas for forms and query parameters
-tests/                    Vitest tests
+scripts/                  Password hash helper
+tests/                    Vitest tests and sample statements
+Dockerfile, docker-compose.yml, Caddyfile   Deployment
 ```
 
-`MonthHistory` and `YearHistory` store running daily and monthly totals that the history chart reads. Every change to a transaction goes through `applyHistoryChanges` in `lib/history.ts` so those totals stay correct.
+`MonthHistory` and `YearHistory` store running daily and monthly totals for the history chart. Every change to an income or expense goes through `applyHistoryChanges` in `lib/history.ts` so those totals stay correct. Transfers don't affect them.

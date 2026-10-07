@@ -6,10 +6,10 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { UserButton } from "@clerk/nextjs";
 import { ModeToggle } from "@/components/ThemeSwitcherBtn";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu } from "lucide-react";
+import { LockKeyhole, Menu } from "lucide-react";
+import { Logout } from "@/app/(auth)/login/actions";
 import { motion, AnimatePresence } from "framer-motion";
 
 function Navbar() {
@@ -24,6 +24,7 @@ function Navbar() {
 const items = [
     { label: "Dashboard", link: "/" },
     { label: "Transactions", link: "/transactions" },
+    { label: "Import", link: "/import" },
     { label: 'Manage', link: "/manage" },
 ]
 
@@ -74,7 +75,7 @@ function MobileNavbar() {
                 </div>
                 <div className="flex items-center gap-2">
                     <ModeToggle />
-                    <UserButton />
+                    <LockButton />
                 </div>
             </nav>
         </motion.div>
@@ -110,10 +111,20 @@ function DesktopNavbar() {
                 </div>
                 <div className="flex items-center gap-2">
                     <ModeToggle />
-                    <UserButton />
+                    <LockButton />
                 </div>
             </nav>
         </motion.div>
+    )
+}
+
+function LockButton() {
+    return (
+        <form action={Logout}>
+            <Button variant="outline" size="icon" type="submit" aria-label="Lock Pennywise" title="Lock">
+                <LockKeyhole className="h-[1.2rem] w-[1.2rem]" />
+            </Button>
+        </form>
     )
 }
 

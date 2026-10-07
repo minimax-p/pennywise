@@ -1,7 +1,7 @@
 "use server";
 
 import { CreateCategorySchema, CreateCategorySchemaType, DeleteCategorySchema, DeleteCategorySchemaType, EditCategorySchema, EditCategorySchemaType } from "@/schema/categories";
-import { currentUser } from "@clerk/nextjs/server";
+import { currentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 
@@ -13,7 +13,7 @@ export async function CreateCategory(form: CreateCategorySchemaType) {
 
     const user = await currentUser();
     if (!user) {
-        redirect('/sign-in');
+        redirect('/login');
     }
 
 
@@ -39,7 +39,7 @@ export async function DeleteCategory(form: DeleteCategorySchemaType) {
 
     const user = await currentUser();
     if (!user) {
-        redirect('/sign-in');
+        redirect('/login');
     }
 
     const categoryToDelete = await prisma.category.findFirst({
@@ -84,7 +84,7 @@ export async function EditCategory(form: EditCategorySchemaType) {
 
     const user = await currentUser();
     if (!user) {
-        redirect('/sign-in');
+        redirect('/login');
     }
 
     const { oldName, newName, icon, type } = parsedBody.data;
@@ -161,7 +161,7 @@ async function GetOrCreateUnsortedCategory(type: string) {
 export async function GetCategories(type: string) {
     const user = await currentUser();
     if (!user) {
-        redirect('/sign-in');
+        redirect('/login');
     }
 
     return prisma.category.findMany({

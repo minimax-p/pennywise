@@ -17,7 +17,7 @@ import CategoryPicker from "@/app/(dashboard)/_components/CategoryPicker";
 import {EditTransaction} from "@/app/(dashboard)/_actions/transactions";
 import {EditTransactionSchema, EditTransactionSchemaType} from "@/schema/transaction";
 import {DateToUTCDate, UTCDateToLocalDate} from "@/lib/helpers";
-import {TransactionType} from "@/lib/types";
+import AccountPicker from "@/app/(dashboard)/_components/AccountPicker";
 import {cn} from "@/lib/utils";
 import type {GetTransactionsHistoryResponseType} from "@/app/api/transactions/route";
 
@@ -28,17 +28,28 @@ interface Props {
 
 const TOAST_ID = 'edit-transaction';
 
+type Kind = EditTransactionSchemaType["type"];
+
+const KIND_COLORS: Record<Kind, string> = {
+    income: "text-sky-500",
+    expense: "text-amber-500",
+    transfer: "text-violet-400",
+};
+
 function EditTransactionDialog({trigger, transaction}: Props) {
     const [open, setOpen] = useState(false);
-    const type = transaction.type as TransactionType;
+    const originalType = transaction.type as Kind;
 
-    const getDefaultValues = useCallback(() => ({
+    const getDefaultValues = useCallback((): EditTransactionSchemaType => ({
         id: transaction.id,
+        type: originalType,
         amount: transaction.amount,
         description: transaction.description,
         date: UTCDateToLocalDate(new Date(transaction.date)),
-        category: transaction.category.name,
-    }), [transaction]);
+        category: originalType === "transfer" ? undefined : transaction.category.name,
+        accountId: transaction.accountId,
+        toAccountId: transaction.toAccountId,
+    }), [transaction, originalType]);
 
     const form = useForm<EditTransactionSchemaType>({
         resolver: zodResolver(EditTransactionSchema),
@@ -55,6 +66,14 @@ function EditTransactionDialog({trigger, transaction}: Props) {
         form.setValue('category', value);
     }, [form]);
 
+    const type = form.watch('type');
+    const changeType = (next: Kind) => {
+        form.setValue('type', next);
+        // Categories belong to one type, so switching starts from no category
+        form.setValue('category', next === originalType && next !== "transfer" ? transaction.category.name : undefined);
+        if (next !== "transfer") form.setValue('toAccountId', null);
+    };
+
     const queryClient = useQueryClient();
 
     const {mutate, isPending} = useMutation({
@@ -64,6 +83,7 @@ function EditTransactionDialog({trigger, transaction}: Props) {
             await Promise.all([
                 queryClient.invalidateQueries({queryKey: ['transactions']}),
                 queryClient.invalidateQueries({queryKey: ['overview']}),
+                queryClient.invalidateQueries({queryKey: ['accounts']}),
             ]);
             setOpen(false);
         },
@@ -86,8 +106,8 @@ function EditTransactionDialog({trigger, transaction}: Props) {
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-                        <Pencil className={cn("h-6 w-6", type === "income" ? "text-sky-500" : "text-amber-500")}/>
-                        Edit {type} transaction
+                        <Pencil className={cn("h-6 w-6", KIND_COLORS[type])}/>
+                        Edit {type}
                     </DialogTitle>
                     {transaction.source && (
                         <DialogDescription>
@@ -97,6 +117,18 @@ function EditTransactionDialog({trigger, transaction}: Props) {
                 </DialogHeader>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                        <div className="grid grid-cols-3 gap-1 rounded-md bg-secondary p-1" role="radiogroup" aria-label="Type">
+                            {(["expense", "income", "transfer"] as Kind[]).map((kind) => (
+                                <button key={kind} type="button" role="radio" aria-checked={type === kind}
+                                        onClick={() => changeType(kind)}
+                                        className={cn(
+                                            "rounded px-2 py-1 text-sm capitalize",
+                                            type === kind ? cn("bg-background font-semibold", KIND_COLORS[kind]) : "text-muted-foreground"
+                                        )}>
+                                    {kind}
+                                </button>
+                            ))}
+                        </div>
                         <div className="flex gap-4">
                             <FormField
                                 control={form.control}
@@ -105,7 +137,7 @@ function EditTransactionDialog({trigger, transaction}: Props) {
                                     <FormItem className="flex-1">
                                         <FormLabel>Amount</FormLabel>
                                         <FormControl>
-                                            <Input type="number" step="0.01" placeholder="0.00" {...field}/>
+                                            <Input type="number" step="0.01" inputMode="decimal" placeholder="0.00" {...field}/>
                                         </FormControl>
                                         <FormMessage/>
                                     </FormItem>
@@ -141,20 +173,60 @@ function EditTransactionDialog({trigger, transaction}: Props) {
                                 )}
                             />
                         </div>
-                        <FormField
-                            control={form.control}
-                            name="category"
-                            render={() => (
-                                <FormItem>
-                                    <FormLabel>Category</FormLabel>
-                                    <FormControl>
-                                        <CategoryPicker type={type} onChange={handleCategoryChange}
-                                                        defaultValue={transaction.category.name}/>
-                                    </FormControl>
-                                    <FormMessage/>
-                                </FormItem>
-                            )}
-                        />
+                        {type === "transfer" ? (
+                            <div className="flex gap-4">
+                                <FormField
+                                    control={form.control}
+                                    name="accountId"
+                                    render={({field}) => (
+                                        <FormItem className="flex-1">
+                                            <FormLabel>From</FormLabel>
+                                            <AccountPicker value={field.value} onChange={field.onChange} placeholder="From account"/>
+                                            <FormMessage/>
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="toAccountId"
+                                    render={({field}) => (
+                                        <FormItem className="flex-1">
+                                            <FormLabel>To</FormLabel>
+                                            <AccountPicker value={field.value} onChange={field.onChange} placeholder="To account"
+                                                           excludeId={form.watch('accountId')}/>
+                                            <FormMessage/>
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        ) : (
+                            <>
+                                <FormField
+                                    control={form.control}
+                                    name="accountId"
+                                    render={({field}) => (
+                                        <FormItem>
+                                            <FormLabel>Account</FormLabel>
+                                            <AccountPicker value={field.value} onChange={field.onChange} allowNone/>
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="category"
+                                    render={() => (
+                                        <FormItem>
+                                            <FormLabel>Category</FormLabel>
+                                            <FormControl>
+                                                <CategoryPicker key={type} type={type} onChange={handleCategoryChange}
+                                                                defaultValue={type === originalType ? transaction.category.name : undefined}/>
+                                            </FormControl>
+                                            <FormMessage/>
+                                        </FormItem>
+                                    )}
+                                />
+                            </>
+                        )}
                         <FormField
                             control={form.control}
                             name="description"
@@ -179,7 +251,9 @@ function EditTransactionDialog({trigger, transaction}: Props) {
                         disabled={isPending}
                         className={cn(
                             "text-white",
-                            type === "income" ? "bg-sky-500 hover:bg-sky-600" : "bg-amber-500 hover:bg-amber-600"
+                            type === "income" && "bg-sky-500 hover:bg-sky-600",
+                            type === "expense" && "bg-amber-500 hover:bg-amber-600",
+                            type === "transfer" && "bg-violet-500 hover:bg-violet-600",
                         )}
                     >
                         {!isPending && "Save changes"}

@@ -1,6 +1,6 @@
 "use server";
 
-import {currentUser} from "@clerk/nextjs/server";
+import {currentUser} from "@/lib/auth";
 import {redirect} from "next/navigation";
 import {LinkTokenCreateRequest, Products} from "plaid";
 import prisma from "@/lib/prisma";
@@ -24,7 +24,7 @@ function plaidErrorResult(error: unknown): { ok: false, error: string } {
 async function requireUser() {
     const user = await currentUser();
     if (!user) {
-        redirect('/sign-in');
+        redirect('/login');
     }
     return user;
 }

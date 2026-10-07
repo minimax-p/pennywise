@@ -1,5 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // The Docker image runs on Debian bookworm
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -43,8 +45,74 @@ model Transaction {
   plaidItemId        String?
   plaidItem          PlaidItem? @relation(fields: [plaidItemId], references: [id], onDelete: SetNull)
 
+  // Where the money came from (for transfers) or went in or out of
+  accountId    String?
+  account      Account?      @relation("AccountTransactions", fields: [accountId], references: [id], onDelete: SetNull)
+  // Transfers only: the account the money went to
+  toAccountId  String?
+  toAccount    Account?      @relation("TransferDestination", fields: [toAccountId], references: [id], onDelete: SetNull)
+  // How it was entered: manual, import, apple_pay or plaid
+  source       String        @default("manual")
+  // Normalized merchant name, used to suggest a category from past transactions
+  payeeKey     String?
+  importedRows ImportedRow[]
+
   @@index([categoryId], map: "Transaction_categoryId_fkey")
   @@index([userId, date])
+  @@index([userId, payeeKey])
+}
+
+model Account {
+  id                String        @id @default(uuid())
+  userId            String
+  name              String
+  // checking, savings, credit or cash
+  type              String
+  institution       String?
+  // A balance the user entered and when it was true. The current balance adds
+  // the transactions dated after it, so older imports don't shift it.
+  knownBalance      Float         @default(0)
+  knownBalanceDate  DateTime      @default(now())
+  // Card name as Apple Wallet shows it, used to file Apple Pay purchases
+  walletCardName    String?
+  // Column mapping remembered from the last CSV import
+  importSettings    Json?
+  archived          Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  transactions      Transaction[] @relation("AccountTransactions")
+  incomingTransfers Transaction[] @relation("TransferDestination")
+  importedRows      ImportedRow[]
+
+  @@unique([userId, name])
+}
+
+// One line of an imported bank statement. Lets re-imports skip lines already
+// imported (even if the transaction was deleted since), and lets a transfer be
+// matched from both accounts' statements.
+model ImportedRow {
+  id            String       @id @default(uuid())
+  accountId     String
+  account       Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  // FITID from OFX/QFX files or an id column, otherwise a hash of the line
+  fingerprint   String
+  createdAt     DateTime     @default(now())
+
+  @@unique([accountId, fingerprint])
+}
+
+// Device keys for the Apple Pay shortcut. Only a SHA-256 hash is stored.
+model CaptureToken {
+  id         String    @id @default(uuid())
+  userId     String
+  name       String
+  tokenHash  String    @unique
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model PlaidItem {

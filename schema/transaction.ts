@@ -1,24 +1,54 @@
 import z from "zod";
 
+const amount = z.coerce.number().positive().multipleOf(0.01);
+
 export const CreateTransactionSchema = z.object({
-    amount: z.coerce.number().positive().multipleOf(0.01),
+    amount,
     description: z.string().optional(),
     date: z.coerce.date(),
     category: z.string(),
     type: z.union([
         z.literal("income"),
         z.literal("expense"),
-    ])
+    ]),
+    accountId: z.string().nullish(),
 })
 
 export type CreateTransactionSchemaType = z.infer<typeof CreateTransactionSchema>;
 
-export const EditTransactionSchema = z.object({
-    id: z.string().min(1),
-    amount: z.coerce.number().positive().multipleOf(0.01),
+export const CreateTransferSchema = z.object({
+    amount,
     description: z.string().optional(),
     date: z.coerce.date(),
-    category: z.string(),
+    fromAccountId: z.string().min(1),
+    toAccountId: z.string().min(1),
+}).refine((t) => t.fromAccountId !== t.toAccountId, {
+    message: "Pick two different accounts",
+    path: ["toAccountId"],
+})
+
+export type CreateTransferSchemaType = z.infer<typeof CreateTransferSchema>;
+
+export const EditTransactionSchema = z.object({
+    id: z.string().min(1),
+    type: z.enum(["income", "expense", "transfer"]),
+    amount,
+    description: z.string().optional(),
+    date: z.coerce.date(),
+    // Required unless it is a transfer
+    category: z.string().optional(),
+    // For transfers, the account the money came from
+    accountId: z.string().nullish(),
+    // Transfers only
+    toAccountId: z.string().nullish(),
+}).superRefine((t, ctx) => {
+    if (t.type === "transfer") {
+        if (!t.accountId) ctx.addIssue({code: "custom", message: "Pick the account the money came from", path: ["accountId"]});
+        if (!t.toAccountId) ctx.addIssue({code: "custom", message: "Pick the account the money went to", path: ["toAccountId"]});
+        if (t.accountId && t.accountId === t.toAccountId) ctx.addIssue({code: "custom", message: "Pick two different accounts", path: ["toAccountId"]});
+    } else if (!t.category) {
+        ctx.addIssue({code: "custom", message: "Pick a category", path: ["category"]});
+    }
 })
 
 export type EditTransactionSchemaType = z.infer<typeof EditTransactionSchema>;

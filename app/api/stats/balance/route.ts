@@ -1,4 +1,4 @@
-import {currentUser} from "@clerk/nextjs/server";
+import {currentUser} from "@/lib/auth";
 import {redirect} from "next/navigation";
 import {OverviewQuerySchema} from "@/schema/overview";
 import prisma from "@/lib/prisma";
@@ -6,7 +6,7 @@ import prisma from "@/lib/prisma";
 export async function GET(request: Request) {
     const user = await currentUser();
     if (!user) {
-        redirect('/sign-in');
+        redirect('/login');
     }
 
     const {searchParams} = new URL(request.url);

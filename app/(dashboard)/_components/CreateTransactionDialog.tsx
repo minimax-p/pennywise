@@ -34,8 +34,7 @@ import {CreateTransaction} from "@/app/(dashboard)/_actions/transactions";
 import {toast} from "sonner";
 import {useMutation, useQueryClient} from "@tanstack/react-query";
 import {DateToUTCDate} from "@/lib/helpers";
-import {Card, CardContent} from "@/components/ui/card";
-// import {Button} from "react-day-picker";
+import AccountPicker, {useRememberedAccount} from "@/app/(dashboard)/_components/AccountPicker";
 
 function CreateTransactionDialog({trigger, type}: Props) {
     const form = useForm<CreateTransactionSchemaType>({
@@ -49,6 +48,7 @@ function CreateTransactionDialog({trigger, type}: Props) {
     const handleCategoryChange = useCallback((value: string)=>{
         form.setValue('category', value);
     }, [form])
+    const [accountId, setAccountId] = useRememberedAccount(`pennywise:${type}-account`);
 
     const queryClient = useQueryClient();
 
@@ -70,6 +70,9 @@ function CreateTransactionDialog({trigger, type}: Props) {
             queryClient.invalidateQueries({
                 queryKey: ['transactions']
             });
+            queryClient.invalidateQueries({
+                queryKey: ['accounts']
+            });
 
             setOpen((prev)=>!prev);
         },
@@ -82,9 +85,10 @@ function CreateTransactionDialog({trigger, type}: Props) {
         toast.loading("Creating transaction...", {id: 'create-transaction'});
         mutate({
             ...values,
+            accountId,
             date: DateToUTCDate(values.date)
         });
-    }, [mutate]);
+    }, [mutate, accountId]);
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -107,7 +111,7 @@ function CreateTransactionDialog({trigger, type}: Props) {
                                         <FormItem className="flex-1">
                                             <FormLabel>Amount</FormLabel>
                                             <FormControl>
-                                                <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                                                <Input type="number" step="0.01" inputMode="decimal" placeholder="0.00" {...field} />
                                             </FormControl>
                                             <FormDescription>Enter the transaction amount</FormDescription>
                                             <FormMessage />
@@ -157,6 +161,10 @@ function CreateTransactionDialog({trigger, type}: Props) {
                                     )}
                                 />
                             </div>
+                            <FormItem>
+                                <FormLabel>{type === "income" ? "Paid into" : "Paid with"}</FormLabel>
+                                <AccountPicker value={accountId} onChange={setAccountId} allowNone />
+                            </FormItem>
                             <FormField
                                 control={form.control}
                                 name="category"
