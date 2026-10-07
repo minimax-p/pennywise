@@ -8,7 +8,7 @@ import {
     EditTransactionSchema,
     EditTransactionSchemaType
 } from "@/schema/transaction";
-import {currentUser} from "@clerk/nextjs/server";
+import {currentUser} from "@/lib/auth";
 import {redirect} from "next/navigation";
 import prisma from "@/lib/prisma";
 import {applyHistoryChanges} from "@/lib/history";
@@ -35,7 +35,7 @@ export async function CreateTransaction(form: CreateTransactionSchemaType) {
     }
     const user = await currentUser();
     if(!user) {
-        redirect("/sign-in");
+        redirect("/login");
     }
 
     const {amount, category, date, description, type} = parsedBody.data;
@@ -67,7 +67,7 @@ export async function EditTransaction(form: EditTransactionSchemaType) {
     }
     const user = await currentUser();
     if (!user) {
-        redirect("/sign-in");
+        redirect("/login");
     }
 
     const {id, amount, category, date, description} = parsedBody.data;
@@ -106,7 +106,7 @@ export async function DeleteTransaction(form: DeleteTransactionSchemaType) {
     }
     const user = await currentUser();
     if (!user) {
-        redirect("/sign-in");
+        redirect("/login");
     }
 
     const existing = await prisma.transaction.findFirst({where: {id: parsedBody.data.id, userId: user.id}});

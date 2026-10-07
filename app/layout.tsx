@@ -2,10 +2,6 @@ import type {Metadata} from "next";
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import "./globals.css";
-import {
-    ClerkProvider,
-} from '@clerk/nextjs'
-import './globals.css'
 import RootProviders from "@/components/providers/RootProviders";
 import {Toaster} from "@/components/ui/sonner";
 import {Inter} from "next/font/google";
@@ -21,13 +17,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({children}: Readonly<{children: ReactNode }>) {
     return (
-        <ClerkProvider afterSignOutUrl="/sign-in">
-            <html lang="en" className="dark selection:bg-amber-900 selection:text-amber-300" style={{colorScheme: "dark",}} suppressHydrationWarning>
-                <body className={`${GeistSans.variable} ${GeistMono.variable} ${inter.className}`}>
-                    <Toaster richColors position="bottom-right" />
-                    <RootProviders>{children}</RootProviders>
-                </body>
-            </html>
-        </ClerkProvider>
+        <html lang="en" className="dark selection:bg-amber-900 selection:text-amber-300" style={{colorScheme: "dark",}} suppressHydrationWarning>
+            <body className={`${GeistSans.variable} ${GeistMono.variable} ${inter.className}`}>
+                <Toaster richColors position="bottom-right" />
+                <RootProviders>{children}</RootProviders>
+            </body>
+        </html>
     )
 }

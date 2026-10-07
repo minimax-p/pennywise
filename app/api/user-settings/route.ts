@@ -1,4 +1,4 @@
-import {currentUser} from "@clerk/nextjs/server";
+import {currentUser} from "@/lib/auth";
 import {redirect} from "next/navigation";
 import prisma from "@/lib/prisma";
 import {revalidatePath} from "next/cache";
@@ -6,7 +6,7 @@ import {revalidatePath} from "next/cache";
 export async function GET (request: Request){
     const user = await currentUser();
     if (!user){
-        redirect('/sign-in');
+        redirect('/login');
     }
     let userSettings = await prisma.userSettings.findUnique({
         where: {

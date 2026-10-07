@@ -1,18 +1,29 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import {NextRequest, NextResponse} from "next/server";
+import {SESSION_COOKIE, verifySessionToken} from "@/lib/session";
 
-const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
+// Reachable without a session. /api/capture checks its own device keys.
+const PUBLIC_PATHS = ["/login", "/api/capture", "/manifest.webmanifest"];
 
-export default clerkMiddleware(async (auth, request) => {
-    if (!isPublicRoute(request)) {
-        await auth.protect()
+export async function middleware(request: NextRequest) {
+    const {pathname, search} = request.nextUrl;
+    if (PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) {
+        return NextResponse.next();
     }
-})
+
+    if (await verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value)) {
+        return NextResponse.next();
+    }
+
+    if (pathname.startsWith("/api/")) {
+        return NextResponse.json({error: "Unauthorized"}, {status: 401});
+    }
+
+    const loginUrl = new URL("/login", request.url);
+    if (pathname !== "/") loginUrl.searchParams.set("next", pathname + search);
+    return NextResponse.redirect(loginUrl);
+}
 
 export const config = {
-    matcher: [
-        // Skip Next.js internals and all static files, unless found in search params
-        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-        // Always run for API routes
-        '/(api|trpc)(.*)',
-    ],
-}
+    // Skip Next.js internals and static files
+    matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpe?g|gif|webp|ico|woff2?|ttf|otf)$).*)'],
+};

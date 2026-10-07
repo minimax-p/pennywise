@@ -1,6 +1,6 @@
 import {afterAll, beforeEach, describe, expect, it, vi} from "vitest";
 
-// Calls the server actions directly against a real MySQL database, with Clerk and Plaid mocked.
+// Calls the server actions directly against a real MySQL database, with the session and Plaid mocked.
 // Point TEST_DATABASE_URL at a disposable, migrated and seeded database; skipped otherwise.
 const {testDatabaseUrl, userId, otherUserId} = vi.hoisted(() => {
     const {randomBytes, randomUUID} = require("node:crypto");
@@ -10,7 +10,7 @@ const {testDatabaseUrl, userId, otherUserId} = vi.hoisted(() => {
     return {testDatabaseUrl: url, userId: `test-${randomUUID()}`, otherUserId: `test-${randomUUID()}`};
 });
 
-vi.mock("@clerk/nextjs/server", () => ({currentUser: vi.fn(async () => ({id: userId}))}));
+vi.mock("@/lib/auth", () => ({currentUser: vi.fn(async () => ({id: userId, firstName: null}))}));
 vi.mock("next/navigation", () => ({
     redirect: vi.fn(() => {
         throw new Error("redirected");

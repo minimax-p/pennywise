@@ -12,7 +12,7 @@ function RootProviders({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
             {children}
-        </ThemeProvider>;
+        </ThemeProvider>
         <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
     )

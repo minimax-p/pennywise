@@ -1,5 +1,5 @@
 import React from 'react';
-import {currentUser} from "@clerk/nextjs/server";
+import {currentUser} from "@/lib/auth";
 import {redirect} from "next/navigation";
 import {Separator} from "@/components/ui/separator";
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card";
@@ -11,13 +11,13 @@ import {CurrencyComboBox} from "@/components/CurrencyComboBox";
 async function Page() {
     const user = await currentUser();
     if (!user){
-        redirect("/sign-in");
+        redirect("/login");
     }
     return (
         <div className="container flex max-w-2xl flex-col items-center justify-between gap-4 ">
             <div>
                 <h1 className="text-center text-3xl">
-                    Welcome, <span className="ml-2 font-bold">{user.firstName}! 🥵 😉</span>
+                    Welcome{user.firstName && <span className="ml-2 font-bold">{user.firstName}</span>}! 👋
                 </h1>
                 <h2 className="mt-4 text-center text-base text-muted-foreground">
                     Let &apos;s get started by setting up your currency
