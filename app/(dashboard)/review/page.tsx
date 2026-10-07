@@ -106,7 +106,7 @@ function ReviewPage() {
                             </p>
                         </Card>
                     ) : (
-                        <div className="grid gap-3 lg:grid-cols-2">
+                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                             {items.map((item) => <ReviewCard key={item.id} item={item}/>)}
                         </div>
                     )}

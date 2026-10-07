@@ -5,7 +5,7 @@ import {Separator} from "@/components/ui/separator";
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card";
 import {Button} from "@/components/ui/button";
 import Link from "next/link";
-import Logo from "@/components/Logo";
+import PennyMark from "@/components/PennyMark";
 import {CurrencyComboBox} from "@/components/CurrencyComboBox";
 
 async function Page() {
@@ -14,13 +14,14 @@ async function Page() {
         redirect("/login");
     }
     return (
-        <div className="container flex max-w-2xl flex-col items-center justify-between gap-4 ">
+        <div className="container flex max-w-2xl flex-col items-center justify-between gap-4 py-8">
+            <PennyMark className="h-24 w-24"/>
             <div>
-                <h1 className="text-center text-3xl">
-                    Welcome{user.firstName && <span className="ml-2 font-bold">{user.firstName}</span>}! 👋
+                <h1 className="text-center font-display text-3xl font-bold">
+                    Welcome{user.firstName && <span className="ml-2">{user.firstName}</span>}! 👋
                 </h1>
                 <h2 className="mt-4 text-center text-base text-muted-foreground">
-                    Let &apos;s get started by setting up your currency
+                    Let&apos;s start with your currency
                 </h2>
                 <h3 className="mt-2 text-center text-sm text-muted-foreground">
                     You can change these settings at any time
@@ -37,12 +38,9 @@ async function Page() {
                 </CardContent>
             </Card>
             <Separator/>
-            <Button className="w-full" asChild>
-                <Link href={"/"}>I&apos;m done! Take me to the dashboard</Link>
+            <Button size="lg" className="w-full" asChild>
+                <Link href={"/"}>Done, take me home</Link>
             </Button>
-            <div className="mt-8">
-                <Logo />
-            </div>
         </div>
     );
 }

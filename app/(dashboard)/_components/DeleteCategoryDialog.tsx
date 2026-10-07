@@ -55,10 +55,10 @@ function DeleteCategoryDialog({trigger, category}: Props) {
                         <div className="rounded-md border border-destructive/20 bg-destructive/10 p-4">
                             <p className="font-semibold text-destructive">You are about to delete:</p>
                             <div className="mt-2 flex items-center gap-2">
-                                <Badge variant="outline" className="text-lg font-mono">
+                                <Badge variant="outline" className="text-lg">
                                     {category.icon}
                                 </Badge>
-                                <span className="text-lg font-bold font-mono">{category.name}</span>
+                                <span className="text-lg font-bold">{category.name}</span>
                             </div>
                         </div>
                     </AlertDialogDescription>

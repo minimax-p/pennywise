@@ -12,6 +12,7 @@ import {useCurrencyFormatter} from "@/app/(dashboard)/_components/TransactionShe
 import type {GetBalanceStatsResponseType} from "@/app/api/stats/balance/route";
 import type {GetCategoriesStatsResponseType} from "@/app/api/stats/categories/route";
 import type {GetHistoryDataResponseType} from "@/app/api/history-data/route";
+import {useWidth} from "@/lib/client/useWidth";
 import {cn} from "@/lib/utils";
 
 type Mode = "month" | "year";
@@ -95,7 +96,7 @@ function ReportsPage() {
                     </Card>
                 </SkeletonWrapper>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <SkeletonWrapper isLoading={categories.isLoading}>
                         <CategoryBreakdown title="Spending" rows={categories.data?.spending ?? []} total={spent}
                                            barClass="bg-chart-spend" formatter={formatter} link={transactionsLink}/>
@@ -134,15 +135,12 @@ function PeriodChart({mode, points, formatter}: {
     mode: Mode, points: GetHistoryDataResponseType, formatter: Intl.NumberFormat
 }) {
     const [hover, setHover] = useState<number | null>(null);
+    const [boxRef, width] = useWidth<HTMLDivElement>(640);
     const [showTable, setShowTable] = useState(false);
     const both = mode === "year";
     const max = useMemo(() => niceMax(Math.max(0, ...points.map((p) => both ? Math.max(p.expense, p.income) : p.expense))), [points, both]);
 
-    if (points.length === 0) {
-        return <p className="py-10 text-center font-semibold text-muted-foreground">Nothing in this period yet.</p>;
-    }
-
-    const W = 640, H = 220, left = 44, right = 8, top = 12, bottom = 24;
+    const W = width, H = 220, left = 40, right = 4, top = 12, bottom = 24;
     const plotW = W - left - right, plotH = H - top - bottom;
     const slot = plotW / points.length;
     const barW = Math.max(3, Math.min(both ? 14 : 12, (slot - 4) / (both ? 2 : 1) - (both ? 1 : 0)));
@@ -159,8 +157,8 @@ function PeriodChart({mode, points, formatter}: {
         return `M${x},${y(0)} V${yTop + r} Q${x},${yTop} ${x + r},${yTop} H${x + barW - r} Q${x + barW},${yTop} ${x + barW},${yTop + r} V${y(0)} Z`;
     };
     const hovered = hover !== null ? points[hover] : null;
-    // Label every month, and every fifth day
-    const showTick = (i: number) => both || i === 0 || (i + 1) % 5 === 0;
+    // Label every month when there's room, and every fifth day
+    const showTick = (i: number) => both ? (slot >= 26 || i % 2 === 0) : (i === 0 || (i + 1) % 5 === 0);
 
     return (
         <>
@@ -178,70 +176,74 @@ function PeriodChart({mode, points, formatter}: {
                     </Button>
                 </div>
             </div>
-            {showTable ? (
-                <div className="max-h-80 overflow-y-auto rounded-2xl border-2">
-                    <table className="w-full text-sm">
-                        <thead className="sticky top-0 bg-secondary text-xs uppercase tracking-wider text-muted-foreground">
-                            <tr>
-                                <th className="px-3 py-2 text-left">{both ? "Month" : "Day"}</th>
-                                <th className="px-3 py-2 text-right">Spent</th>
-                                {both && <th className="px-3 py-2 text-right">Came in</th>}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {points.map((p, i) => (
-                                <tr key={i} className="border-t">
-                                    <td className="px-3 py-1.5 font-semibold">{name(i)}</td>
-                                    <td className="px-3 py-1.5 text-right money">{formatter.format(p.expense)}</td>
-                                    {both && <td className="px-3 py-1.5 text-right money">{formatter.format(p.income)}</td>}
+            <div ref={boxRef}>
+                {points.length === 0 ? (
+                    <p className="py-10 text-center font-semibold text-muted-foreground">Nothing in this period yet.</p>
+                ) : showTable ? (
+                    <div className="max-h-80 overflow-y-auto rounded-2xl border-2">
+                        <table className="w-full text-sm">
+                            <thead className="sticky top-0 bg-secondary text-xs uppercase tracking-wider text-muted-foreground">
+                                <tr>
+                                    <th className="px-3 py-2 text-left">{both ? "Month" : "Day"}</th>
+                                    <th className="px-3 py-2 text-right">Spent</th>
+                                    {both && <th className="px-3 py-2 text-right">Came in</th>}
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            ) : (
-                <div className="relative">
-                    <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full touch-pan-y" role="img"
-                         aria-label={both ? "Spending and money in for each month" : "Spending for each day"}
-                         onPointerLeave={() => setHover(null)}>
-                        {[0, 0.5, 1].map((f) => (
-                            <g key={f}>
-                                <line x1={left} x2={W - right} y1={y(max * f)} y2={y(max * f)}
-                                      className={f === 0 ? "stroke-border" : "stroke-border/60"} strokeWidth={f === 0 ? 2 : 1}
-                                      strokeDasharray={f === 0 ? undefined : "3 4"}/>
-                                <text x={left - 6} y={y(max * f) + 4} textAnchor="end" className="fill-muted-foreground text-[11px] font-bold">
-                                    {compact.format(max * f)}
-                                </text>
-                            </g>
-                        ))}
-                        {points.map((p, i) => {
-                            const x0 = left + slot * i + (slot - (both ? barW * 2 + 2 : barW)) / 2;
-                            return (
-                                <g key={i}>
-                                    {hover === i && <rect x={left + slot * i} y={top} width={slot} height={plotH} rx={6} className="fill-accent"/>}
-                                    <path d={bar(x0, p.expense)} className="fill-chart-spend"/>
-                                    {both && <path d={bar(x0 + barW + 2, p.income)} className="fill-chart-income"/>}
-                                    {showTick(i) && (
-                                        <text x={left + slot * i + slot / 2} y={H - 6} textAnchor="middle"
-                                              className="fill-muted-foreground text-[11px] font-bold">{name(i)}</text>
-                                    )}
-                                    {/* Bigger than the bars, so thin ones are easy to hit */}
-                                    <rect x={left + slot * i} y={top} width={slot} height={plotH + bottom} fill="transparent"
-                                          onPointerEnter={() => setHover(i)} onPointerDown={() => setHover(i)}/>
+                            </thead>
+                            <tbody>
+                                {points.map((p, i) => (
+                                    <tr key={i} className="border-t">
+                                        <td className="px-3 py-1.5 font-semibold">{name(i)}</td>
+                                        <td className="px-3 py-1.5 text-right money">{formatter.format(p.expense)}</td>
+                                        {both && <td className="px-3 py-1.5 text-right money">{formatter.format(p.income)}</td>}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : (
+                    <div className="relative">
+                        <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block max-w-full touch-pan-y" role="img"
+                             aria-label={both ? "Spending and money in for each month" : "Spending for each day"}
+                             onPointerLeave={() => setHover(null)}>
+                            {[0, 0.5, 1].map((f) => (
+                                <g key={f}>
+                                    <line x1={left} x2={W - right} y1={y(max * f)} y2={y(max * f)}
+                                          className={f === 0 ? "stroke-border" : "stroke-border/60"} strokeWidth={f === 0 ? 2 : 1}
+                                          strokeDasharray={f === 0 ? undefined : "3 4"}/>
+                                    <text x={left - 6} y={y(max * f) + 4} textAnchor="end" className="fill-muted-foreground text-[11px] font-bold">
+                                        {compact.format(max * f)}
+                                    </text>
                                 </g>
-                            );
-                        })}
-                    </svg>
-                    {hovered && hover !== null && (
-                        <div className="pointer-events-none absolute top-0 z-10 rounded-2xl border-2 bg-card px-3 py-2 text-xs font-bold shadow-lg"
-                             style={{left: `${Math.min(78, Math.max(2, (left + slot * hover) / W * 100))}%`}}>
-                            <p className="mb-1 font-display text-sm">{both ? name(hover) : `Day ${hovered.day}`}</p>
-                            <p className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-chart-spend"/>Spent {formatter.format(hovered.expense)}</p>
-                            {both && <p className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-chart-income"/>Came in {formatter.format(hovered.income)}</p>}
-                        </div>
-                    )}
-                </div>
-            )}
+                            ))}
+                            {points.map((p, i) => {
+                                const x0 = left + slot * i + (slot - (both ? barW * 2 + 2 : barW)) / 2;
+                                return (
+                                    <g key={i}>
+                                        {hover === i && <rect x={left + slot * i} y={top} width={slot} height={plotH} rx={6} className="fill-accent"/>}
+                                        <path d={bar(x0, p.expense)} className="fill-chart-spend"/>
+                                        {both && <path d={bar(x0 + barW + 2, p.income)} className="fill-chart-income"/>}
+                                        {showTick(i) && (
+                                            <text x={left + slot * i + slot / 2} y={H - 6} textAnchor="middle"
+                                                  className="fill-muted-foreground text-[11px] font-bold">{name(i)}</text>
+                                        )}
+                                        {/* Bigger than the bars, so thin ones are easy to hit */}
+                                        <rect x={left + slot * i} y={top} width={slot} height={plotH + bottom} fill="transparent"
+                                              onPointerEnter={() => setHover(i)} onPointerDown={() => setHover(i)}/>
+                                    </g>
+                                );
+                            })}
+                        </svg>
+                        {hovered && hover !== null && (
+                            <div className="pointer-events-none absolute top-0 z-10 rounded-2xl border-2 bg-card px-3 py-2 text-xs font-bold shadow-lg"
+                                 style={{left: `${Math.min(78, Math.max(2, (left + slot * hover) / W * 100))}%`}}>
+                                <p className="mb-1 font-display text-sm">{both ? name(hover) : `Day ${hovered.day}`}</p>
+                                <p className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-chart-spend"/>Spent {formatter.format(hovered.expense)}</p>
+                                {both && <p className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-chart-income"/>Came in {formatter.format(hovered.income)}</p>}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
         </>
     );
 }

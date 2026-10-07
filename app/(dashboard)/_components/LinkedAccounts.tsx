@@ -72,12 +72,12 @@ function LinkedAccountList({items}: { items: PlaidItemRow[] }) {
             )}
             {items.map((item) => <LinkedAccountRow key={item.id} item={item}/>)}
             <div className="flex flex-wrap gap-2">
-                <PlaidLink className="gap-2 font-mono">
+                <PlaidLink className="gap-2">
                     <Plus className="h-4 w-4"/>
                     Link a bank account
                 </PlaidLink>
                 {items.length > 1 && (
-                    <Button variant="outline" className="gap-2 font-mono" disabled={syncAll.isPending}
+                    <Button variant="outline" className="gap-2" disabled={syncAll.isPending}
                             onClick={() => syncAll.mutate(undefined)}>
                         <RefreshCw className={syncAll.isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"}/>
                         Sync all
@@ -95,7 +95,7 @@ function LinkedAccountRow({item}: { item: PlaidItemRow }) {
     return (
         <div className="flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-                <Landmark className="h-10 w-10 rounded-lg bg-emerald-400/10 p-2 text-emerald-500"/>
+                <Landmark className="h-10 w-10 rounded-2xl bg-primary-soft p-2 text-primary"/>
                 <div>
                     <p className="font-semibold">{item.institutionName ?? 'Bank account'}</p>
                     <p className="text-sm text-muted-foreground">

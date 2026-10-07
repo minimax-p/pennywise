@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, {useState} from 'react';
 import Link from "next/link";
 import {useQuery} from "@tanstack/react-query";
 import {AlertTriangle, ChevronRight, Inbox, Scale} from "lucide-react";
@@ -13,6 +13,7 @@ import {useCurrencyFormatter} from "@/app/(dashboard)/_components/TransactionShe
 import {CompactList} from "@/app/(dashboard)/_components/TransactionList";
 import type {HomeData} from "@/lib/home";
 import {dayFormatter, formatBalance} from "@/lib/money";
+import {useWidth} from "@/lib/client/useWidth";
 import {cn} from "@/lib/utils";
 
 const monthFormatter = new Intl.DateTimeFormat(undefined, {timeZone: "UTC", month: "long"});
@@ -50,8 +51,8 @@ function HomeView({firstName}: { firstName: string | null }) {
             <p className="font-bold text-muted-foreground">
                 Hi{firstName ? ` ${firstName}` : ""} 👋
             </p>
-            <div className="grid gap-5 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-                <div className="flex flex-col gap-5">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+                <div className="flex min-w-0 flex-col gap-5">
                     <SkeletonWrapper isLoading={home.isLoading}>
                         <SpendingMoney data={data} formatter={formatter}/>
                     </SkeletonWrapper>
@@ -69,7 +70,7 @@ function HomeView({firstName}: { firstName: string | null }) {
                     </SkeletonWrapper>
                     {data && data.topCategories.length > 0 && <TopCategories data={data} formatter={formatter}/>}
                 </div>
-                <div className="flex flex-col gap-5">
+                <div className="flex min-w-0 flex-col gap-5">
                     <SkeletonWrapper isLoading={home.isLoading}>
                         {data ? <Accounts data={data} formatter={formatter}/> : <div className="h-64"/>}
                     </SkeletonWrapper>
@@ -203,38 +204,65 @@ function ThisMonth({data, formatter}: { data: HomeData, formatter: Intl.NumberFo
 function PaceChart({pace, lastMonthPace, daysInMonth}: {
     pace: { day: number, total: number }[], lastMonthPace: { day: number, total: number }[], daysInMonth: number
 }) {
-    const W = 320, H = 120, left = 4, right = 4, top = 8, bottom = 20;
+    const formatter = useCurrencyFormatter();
+    const [boxRef, width] = useWidth<HTMLDivElement>(320);
+    const [hover, setHover] = useState<number | null>(null);
+    const W = width, H = 130, left = 4, right = 4, top = 10, bottom = 22;
     const lastDay = Math.max(daysInMonth, lastMonthPace.length, 2);
     const maxY = Math.max(1, ...pace.map((p) => p.total), ...lastMonthPace.map((p) => p.total)) * 1.08;
     const x = (day: number) => left + (day - 1) / (lastDay - 1) * (W - left - right);
     const y = (value: number) => top + (1 - value / maxY) * (H - top - bottom);
     const line = (points: { day: number, total: number }[]) => points.map((p) => `${x(p.day).toFixed(1)},${y(p.total).toFixed(1)}`).join(" ");
     const end = pace[pace.length - 1];
+    const dayAt = (clientX: number, rect: DOMRect) =>
+        Math.min(lastDay, Math.max(1, Math.round((clientX - rect.left - left) / (W - left - right) * (lastDay - 1)) + 1));
+    const thisMonthOn = (day: number) => pace.find((p) => p.day === day)?.total;
+    const lastMonthOn = (day: number) => lastMonthPace.find((p) => p.day === day)?.total;
 
     return (
-        <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img"
-             aria-label="Spending this month so far compared with last month">
-            <line x1={left} x2={W - right} y1={y(0)} y2={y(0)} className="stroke-border" strokeWidth={2} strokeLinecap="round"/>
-            {lastMonthPace.length > 1 && (
-                <polyline points={line(lastMonthPace)} fill="none" className="stroke-muted-foreground/50" strokeWidth={2} strokeDasharray="4 4" strokeLinejoin="round"/>
+        <div ref={boxRef} className="relative">
+            <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block max-w-full touch-pan-y" role="img"
+                 aria-label="Spending this month so far compared with last month"
+                 onPointerMove={(e) => setHover(dayAt(e.clientX, e.currentTarget.getBoundingClientRect()))}
+                 onPointerDown={(e) => setHover(dayAt(e.clientX, e.currentTarget.getBoundingClientRect()))}
+                 onPointerLeave={() => setHover(null)}>
+                <line x1={left} x2={W - right} y1={y(0)} y2={y(0)} className="stroke-border" strokeWidth={2} strokeLinecap="round"/>
+                {lastMonthPace.length > 1 && (
+                    <polyline points={line(lastMonthPace)} fill="none" className="stroke-muted-foreground/50" strokeWidth={2} strokeDasharray="4 4" strokeLinejoin="round"/>
+                )}
+                {pace.length > 0 && (
+                    <>
+                        <polygon points={`${x(1)},${y(0)} ${line(pace)} ${x(end.day)},${y(0)}`} className="fill-chart-spend/20"/>
+                        <polyline points={line(pace)} fill="none" className="stroke-chart-spend" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round"/>
+                        <circle cx={x(end.day)} cy={y(end.total)} r={5} className="fill-chart-spend stroke-card" strokeWidth={2}/>
+                    </>
+                )}
+                {hover !== null && (
+                    <line x1={x(hover)} x2={x(hover)} y1={top} y2={y(0)} className="stroke-foreground/30" strokeWidth={1.5} strokeDasharray="3 3"/>
+                )}
+                <text x={left} y={H - 5} className="fill-muted-foreground text-[11px] font-bold">1</text>
+                {end && end.day > 3 && end.day < lastDay - 3 && (
+                    <text x={x(end.day)} y={H - 5} textAnchor="middle" className="fill-foreground text-[11px] font-bold">Today</text>
+                )}
+                <text x={W - right} y={H - 5} textAnchor="end" className="fill-muted-foreground text-[11px] font-bold">{daysInMonth}</text>
+                {lastMonthPace.length > 1 && (
+                    <text x={W - right} y={Math.max(top + 10, y(lastMonthPace[lastMonthPace.length - 1].total) - 6)} textAnchor="end"
+                          className="fill-muted-foreground text-[11px] font-bold">last month</text>
+                )}
+            </svg>
+            {hover !== null && (
+                <div className="pointer-events-none absolute top-0 z-10 rounded-2xl border-2 bg-card px-3 py-2 text-xs font-bold shadow-lg"
+                     style={{left: `${Math.min(60, Math.max(0, x(hover) / W * 100 - 20))}%`}}>
+                    <p className="mb-0.5 font-display text-sm">Day {hover}</p>
+                    {thisMonthOn(hover) !== undefined && (
+                        <p className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-chart-spend"/>This month {formatter.format(thisMonthOn(hover)!)}</p>
+                    )}
+                    {lastMonthOn(hover) !== undefined && (
+                        <p className="flex items-center gap-1.5 text-muted-foreground"><span className="h-0.5 w-2 bg-muted-foreground"/>Last month {formatter.format(lastMonthOn(hover)!)}</p>
+                    )}
+                </div>
             )}
-            {pace.length > 0 && (
-                <>
-                    <polygon points={`${x(1)},${y(0)} ${line(pace)} ${x(end.day)},${y(0)}`} className="fill-chart-spend/20"/>
-                    <polyline points={line(pace)} fill="none" className="stroke-chart-spend" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round"/>
-                    <circle cx={x(end.day)} cy={y(end.total)} r={5} className="fill-chart-spend stroke-card" strokeWidth={2}/>
-                </>
-            )}
-            <text x={left} y={H - 4} className="fill-muted-foreground text-[10px] font-bold">1</text>
-            {end && end.day > 3 && end.day < lastDay - 3 && (
-                <text x={x(end.day)} y={H - 4} textAnchor="middle" className="fill-foreground text-[10px] font-bold">Today</text>
-            )}
-            <text x={W - right} y={H - 4} textAnchor="end" className="fill-muted-foreground text-[10px] font-bold">{daysInMonth}</text>
-            {lastMonthPace.length > 1 && (
-                <text x={W - right} y={Math.max(top + 10, y(lastMonthPace[lastMonthPace.length - 1].total) - 6)} textAnchor="end"
-                      className="fill-muted-foreground text-[10px] font-bold">last month</text>
-            )}
-        </svg>
+        </div>
     );
 }
 

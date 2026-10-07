@@ -141,8 +141,8 @@ function BalanceCheckSheet({account, open, onOpenChange}: Props) {
                                     </span>
                                     <span>
                                         Pennywise has {shown(result.expected)}. {missingHint(result.difference, owes, bank)}
-                                        {result.previousCheckAt
-                                            ? `, or one of the ${result.transactionsSince} transactions since ${dayFormatter.format(new Date(result.previousCheckAt))} is different.`
+                                        {result.previousCheckAt && result.transactionsSince > 0
+                                            ? `, or one of the ${result.transactionsSince} ${result.transactionsSince === 1 ? "transaction" : "transactions"} since ${dayFormatter.format(new Date(result.previousCheckAt))} is different.`
                                             : "."}
                                     </span>
                                 </div>

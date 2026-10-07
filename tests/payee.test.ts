@@ -15,6 +15,13 @@ describe("payeeKey", () => {
         expect(payeeKey(description)).toBe(key);
     });
 
+    it("tells Zelle payments apart by the person", () => {
+        expect(payeeKey("Zelle payment to INGA 31088133579")).toBe("ZELLE TO INGA");
+        expect(payeeKey("Zelle payment from SANG DAO 2918233")).toBe("ZELLE FROM SANG DAO");
+        expect(payeeKey("Zelle payment to Huu Nhat Minh Pham JPM99cp7nm8d")).toBe("ZELLE TO HUU NHAT");
+        expect(payeeKey("Zelle payment to Dana Park JPM99aa")).not.toBe(payeeKey("Zelle payment to Sam Rivera JPM99bb"));
+    });
+
     it("returns null when there is nothing to go on", () => {
         expect(payeeKey("#1234 5678")).toBeNull();
         expect(payeeTokens("")).toEqual([]);
@@ -26,6 +33,11 @@ describe("payeesSimilar", () => {
         expect(payeesSimilar("Starbucks", "STARBUCKS STORE 12345 SEATTLE WA")).toBe(true);
         expect(payeesSimilar("Blue Bottle Coffee", "SQ *BLUE BOTTLE COFFEE #123 OAKLAND CA")).toBe(true);
         expect(payeesSimilar("Trader Joe's", "TRADER JOE S #552 SAN FRANCISCO CA")).toBe(true);
+    });
+
+    it("matches Zelle payments only with the same person", () => {
+        expect(payeesSimilar("Zelle payment to SANG 3108813", "Zelle payment to SANG 9921733")).toBe(true);
+        expect(payeesSimilar("Zelle payment to SANG 3108813", "Zelle payment to CUONG 3108814")).toBe(false);
     });
 
     it("does not match different merchants", () => {

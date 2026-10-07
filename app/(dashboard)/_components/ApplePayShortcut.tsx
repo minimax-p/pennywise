@@ -101,7 +101,7 @@ function CreateKeyDialog() {
             if (!next) setToken(null);
         }}>
             <DialogTrigger asChild>
-                <Button className="gap-2 font-mono"><Plus className="h-4 w-4"/>Set up the shortcut</Button>
+                <Button className="gap-2"><Plus className="h-4 w-4"/>Set up the shortcut</Button>
             </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[520px]">
                 <DialogHeader>

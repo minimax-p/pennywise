@@ -102,10 +102,14 @@ function AccountPicker({value, onChange, allowNone, placeholder, excludeId}: Pro
 }
 
 // Accounts as big tappable chips, for forms
-export function AccountChips({value, onChange, allowNone, excludeId, label}: Props & { label: string }) {
+export function AccountChips({value, onChange, allowNone, excludeId, excludeTypes, label}: Props & {
+    label: string,
+    // Account types that make no sense here, like spending from a CD
+    excludeTypes?: string[],
+}) {
     const {data} = useAccounts();
     const accounts = (Array.isArray(data) ? data : [])
-        .filter((a) => (!a.archived || a.id === value) && a.id !== excludeId);
+        .filter((a) => (!a.archived || a.id === value) && a.id !== excludeId && (a.id === value || !excludeTypes?.includes(a.type)));
     const known = value && accounts.some((a) => a.id === value) ? value : null;
     const chip = (selected: boolean) => cn(
         "flex items-center gap-1.5 rounded-full border-2 px-3.5 py-2 text-sm font-bold transition-colors",

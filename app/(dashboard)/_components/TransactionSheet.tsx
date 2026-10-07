@@ -227,7 +227,8 @@ function TransactionSheet({open, onOpenChange, kind: initialKind = "expense", tr
                         <span className="text-3xl font-semibold text-muted-foreground">{currencySymbol}</span>
                         <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
                                inputMode="decimal" placeholder="0.00" aria-label="Amount" autoFocus={!editing}
-                               className="w-48 bg-transparent text-center text-5xl font-semibold outline-none placeholder:text-muted-foreground/40 money"/>
+                               style={{width: `${Math.max(4, amount.length + 0.5)}ch`}}
+                               className="max-w-[70vw] bg-transparent text-left text-5xl font-semibold outline-none placeholder:text-muted-foreground/40 money"/>
                     </label>
 
                     <div className="flex flex-col gap-2">
@@ -238,7 +239,8 @@ function TransactionSheet({open, onOpenChange, kind: initialKind = "expense", tr
 
                     <div className="flex flex-col gap-2">
                         <Label>{accountLabel}</Label>
-                        <AccountChips label={accountLabel} value={accountId} onChange={setAccountId} allowNone={kind !== "transfer"}/>
+                        <AccountChips label={accountLabel} value={accountId} onChange={setAccountId} allowNone={kind !== "transfer"}
+                                      excludeTypes={kind === "expense" ? ["cd"] : undefined}/>
                     </div>
                     {kind === "transfer" && (
                         <div className="flex flex-col gap-2">
