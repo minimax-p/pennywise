@@ -17,6 +17,7 @@ import AccountsManager from "@/app/(dashboard)/_components/AccountsManager";
 import ApplePayShortcut from "@/app/(dashboard)/_components/ApplePayShortcut";
 import RulesManager from "@/app/(dashboard)/_components/RulesManager";
 import CategoriesManager from "@/app/(dashboard)/_components/CategoriesManager";
+import StartOver from "@/app/(dashboard)/_components/StartOver";
 import {ConvertSelfZelle, UpdateSelfNames} from "@/app/(dashboard)/_actions/settings";
 import {useInvalidateMoney} from "@/lib/client/useInvalidateMoney";
 
@@ -85,6 +86,15 @@ function Page() {
                     </CardHeader>
                     <CardContent>
                         <CategoriesManager type="income"/>
+                    </CardContent>
+                </Card>
+                <Card className="border-destructive/40">
+                    <CardHeader>
+                        <CardTitle>Start over</CardTitle>
+                        <CardDescription>Delete what you imported, or everything, and begin again</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <StartOver/>
                     </CardContent>
                 </Card>
             </div>

@@ -216,6 +216,10 @@ Pennywise starts with a short list of categories in groups. On **Manage**, tap o
 
 Updating from an earlier version moves your transactions from the old, longer list to the new one (for example Restaurants, Fast Food and Takeout all become Eating out). Categories you made yourself stay as they are.
 
+### Starting over
+
+Imported the wrong file? At the bottom of **Manage**, **Start over** can delete all transactions (accounts, categories, rules and people stay, so you can import again) or everything. Run `./scripts/deploy.sh backup` first if you might want it back.
+
 ### 6. Add Pennywise to the home screen
 
 In Safari, open your Pennywise address, tap Share, then **Add to Home Screen**.
