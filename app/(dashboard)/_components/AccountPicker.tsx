@@ -2,7 +2,7 @@
 
 import React, {useCallback, useEffect, useState} from 'react';
 import {useQuery} from "@tanstack/react-query";
-import {CreditCard, Landmark, LucideIcon, PiggyBank, Vault, Wallet} from "lucide-react";
+import {Banknote, CreditCard, Landmark, LucideIcon, PiggyBank, Vault, Wallet} from "lucide-react";
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select";
 import {AccountType} from "@/lib/types";
 import type {GetAccountsResponseType} from "@/app/api/accounts/route";
@@ -15,7 +15,8 @@ export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
     savings: "Savings",
     cd: "CD",
     credit: "Credit card",
-    cash: "Cash or wallet",
+    cash: "Cash",
+    wallet: "Venmo, PayPal or Cash App",
 };
 
 export const ACCOUNT_TYPE_ICONS: Record<AccountType, LucideIcon> = {
@@ -23,7 +24,8 @@ export const ACCOUNT_TYPE_ICONS: Record<AccountType, LucideIcon> = {
     savings: PiggyBank,
     cd: Vault,
     credit: CreditCard,
-    cash: Wallet,
+    cash: Banknote,
+    wallet: Wallet,
 };
 
 export function accountIcon(type: string): LucideIcon {

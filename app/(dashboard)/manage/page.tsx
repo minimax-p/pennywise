@@ -12,12 +12,11 @@ import {CurrencyComboBox} from "@/components/CurrencyComboBox";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
 import {TransactionType} from "@/lib/types";
-import CreateCategoryDialog from "@/app/(dashboard)/_components/CreateCategoryDialog";
-import DeleteCategoryDialog from "@/app/(dashboard)/_components/DeleteCategoryDialog";
-import EditCategoryDialog from "@/app/(dashboard)/_components/EditCategoryDialog";
 import LinkedAccounts from "@/app/(dashboard)/_components/LinkedAccounts";
 import AccountsManager from "@/app/(dashboard)/_components/AccountsManager";
 import ApplePayShortcut from "@/app/(dashboard)/_components/ApplePayShortcut";
+import RulesManager from "@/app/(dashboard)/_components/RulesManager";
+import CategoriesManager from "@/app/(dashboard)/_components/CategoriesManager";
 import {ConvertSelfZelle, UpdateSelfNames} from "@/app/(dashboard)/_actions/settings";
 import {useInvalidateMoney} from "@/lib/client/useInvalidateMoney";
 
@@ -30,7 +29,7 @@ function Page() {
 
     return (
         <>
-            <PageHeader title="Manage" subtitle="Accounts, your name at the bank, the Apple Pay shortcut and categories"/>
+            <PageHeader title="Manage" subtitle="Accounts, your name at the bank, rules, iPhone shortcuts and categories"/>
             <div className='container flex flex-col gap-4 py-3'>
                 <Card>
                     <CardHeader>
@@ -44,8 +43,17 @@ function Page() {
                 <SelfNamesCard settings={userSettingsQuery.data}/>
                 <Card>
                     <CardHeader>
-                        <CardTitle>Apple Pay shortcut</CardTitle>
-                        <CardDescription>Log Apple Pay purchases automatically as you pay</CardDescription>
+                        <CardTitle>Rules</CardTitle>
+                        <CardDescription>How new transactions are filed and named, before anything else</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <RulesManager/>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>iPhone shortcuts</CardTitle>
+                        <CardDescription>Log purchases without opening Pennywise</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <ApplePayShortcut/>
@@ -61,8 +69,24 @@ function Page() {
                         <CurrencyComboBox/>
                     </CardContent>
                 </Card>
-                <CategoryList type='expense'/>
-                <CategoryList type='income'/>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Spending categories</CardTitle>
+                        <CardDescription>Tap one to rename it, move it to another group, hide it or merge it into another.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <CategoriesManager type="expense"/>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Money-in categories</CardTitle>
+                        <CardDescription>Refunds and paybacks go in the spending category they were for, not here.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <CategoriesManager type="income"/>
+                    </CardContent>
+                </Card>
             </div>
         </>
     );
@@ -152,54 +176,6 @@ function SelfNamesCard({settings}: { settings?: UserSettings }) {
                 )}
             </CardContent>
         </Card>
-    );
-}
-
-function CategoryList({type}: { type: TransactionType }) {
-    const categoriesQuery = useQuery<Category[]>({
-        queryKey: ['categories', type],
-        queryFn: () => fetch(`/api/categories?type=${type}`).then(res => res.json())
-    });
-    const categories = Array.isArray(categoriesQuery.data) ? categoriesQuery.data : [];
-
-    return (
-        <SkeletonWrapper isLoading={categoriesQuery.isLoading}>
-            <Card>
-                <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
-                    <div>
-                        <CardTitle>{type === 'income' ? 'Income categories' : 'Spending categories'}</CardTitle>
-                        <CardDescription>Built-in ones can&apos;t be changed. Yours can be renamed or removed.</CardDescription>
-                    </div>
-                    <CreateCategoryDialog type={type} successCallBack={() => categoriesQuery.refetch()}
-                                          trigger={<Button variant="outline"><Plus/>New</Button>}/>
-                </CardHeader>
-                <CardContent>
-                    {categories.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No {type === "income" ? "income" : "spending"} categories yet.</p>
-                    ) : (
-                        <div className="flex flex-wrap gap-2">
-                            {categories.map((category) => <CategoryChip key={category.id} category={category}/>)}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-        </SkeletonWrapper>
-    );
-}
-
-function CategoryChip({category}: { category: Category }) {
-    const chip = (
-        <span className="flex items-center gap-1.5 rounded-full border-2 bg-card px-3 py-1.5 text-sm font-bold">
-            <span role="img">{category.icon}</span>{category.name}
-        </span>
-    );
-    if (category.isUniversal) return chip;
-    return (
-        <span className="flex items-center gap-1 rounded-full border-2 border-primary/40 bg-primary-soft py-1 pl-3 pr-1 text-sm font-bold">
-            <span role="img">{category.icon}</span>{category.name}
-            <EditCategoryDialog category={category} trigger={<Button variant="ghost" size="sm" className="h-7 px-2">Edit</Button>}/>
-            <DeleteCategoryDialog category={category} trigger={<Button variant="ghost" size="sm" className="h-7 px-2 text-destructive">Remove</Button>}/>
-        </span>
     );
 }
 

@@ -6,14 +6,13 @@ import {usePathname} from "next/navigation";
 import {useQuery} from "@tanstack/react-query";
 import {useTheme} from "next-themes";
 import {
-    ArrowLeftRight, ChartPie, Ellipsis, FileUp, House, Inbox, Landmark, List, LockKeyhole, LucideIcon, Monitor, Moon, Plus,
-    Settings, Sun, TrendingDown, TrendingUp
+    ChartPie, Ellipsis, FileUp, House, Inbox, Landmark, List, LockKeyhole, LucideIcon, Monitor, Moon, Plus, Settings, Sun, Users
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import {Button} from "@/components/ui/button";
-import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle} from "@/components/ui/dialog";
+import {Dialog, DialogContent, DialogHeader, DialogTitle} from "@/components/ui/dialog";
 import {Logout} from "@/app/(auth)/login/actions";
-import TransactionSheet, {Kind} from "@/app/(dashboard)/_components/TransactionSheet";
+import TransactionSheet from "@/app/(dashboard)/_components/TransactionSheet";
 import {cn} from "@/lib/utils";
 
 type NavItem = { label: string, link: string, icon: LucideIcon };
@@ -22,6 +21,7 @@ const DESKTOP_ITEMS: NavItem[] = [
     {label: "Home", link: "/", icon: House},
     {label: "Transactions", link: "/transactions", icon: List},
     {label: "Sort", link: "/review", icon: Inbox},
+    {label: "People", link: "/people", icon: Users},
     {label: "Reports", link: "/reports", icon: ChartPie},
     {label: "Import", link: "/import", icon: FileUp},
     {label: "Manage", link: "/manage", icon: Settings},
@@ -29,6 +29,7 @@ const DESKTOP_ITEMS: NavItem[] = [
 
 const MORE_ITEMS: (NavItem & { hint: string })[] = [
     {label: "Accounts", link: "/accounts", icon: Landmark, hint: "Balances and checks"},
+    {label: "People", link: "/people", icon: Users, hint: "Who owes you, Zelle and Venmo"},
     {label: "Reports", link: "/reports", icon: ChartPie, hint: "Months and years"},
     {label: "Import", link: "/import", icon: FileUp, hint: "Bank statements"},
     {label: "Manage", link: "/manage", icon: Settings, hint: "Accounts, categories, shortcut"},
@@ -56,45 +57,9 @@ function CountBadge({count, className}: { count: number, className?: string }) {
     );
 }
 
-// The three ways to add money, used by the + buttons
+// The + buttons open the Log sheet, ready for an amount; Spent, Got and Moved are tabs in it
 export function AddMenu({open, onOpenChange}: { open: boolean, onOpenChange: (open: boolean) => void }) {
-    const [kind, setKind] = useState<Kind | null>(null);
-    const choices: { kind: Kind, title: string, hint: string, icon: LucideIcon, style: string }[] = [
-        {kind: "expense", title: "Spent money", hint: "A card swipe, cash, a bill", icon: TrendingDown, style: "bg-spend-soft text-spend-ink"},
-        {kind: "income", title: "Got money", hint: "Pay, a sale, money back", icon: TrendingUp, style: "bg-income-soft text-income-ink"},
-        {kind: "transfer", title: "Moved money", hint: "Card payment, savings, ATM", icon: ArrowLeftRight, style: "bg-move-soft text-move-ink"},
-    ];
-    return (
-        <>
-            <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="sm:max-w-[420px]">
-                    <DialogHeader>
-                        <DialogTitle>Add</DialogTitle>
-                        <DialogDescription>What happened?</DialogDescription>
-                    </DialogHeader>
-                    <div className="flex flex-col gap-3">
-                        {choices.map((c) => (
-                            <button key={c.kind} type="button"
-                                    onClick={() => {
-                                        onOpenChange(false);
-                                        setKind(c.kind);
-                                    }}
-                                    className="flex items-center gap-4 rounded-3xl border-2 bg-card p-4 text-left shadow-[0_4px_0_0_hsl(var(--border))] transition-transform active:translate-y-[3px] active:shadow-[0_1px_0_0_hsl(var(--border))]">
-                                <span className={cn("grid h-12 w-12 place-items-center rounded-2xl", c.style)}>
-                                    <c.icon className="h-6 w-6"/>
-                                </span>
-                                <span className="flex flex-col">
-                                    <span className="font-display text-lg font-semibold">{c.title}</span>
-                                    <span className="text-sm text-muted-foreground">{c.hint}</span>
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-                </DialogContent>
-            </Dialog>
-            <TransactionSheet open={kind !== null} onOpenChange={(next) => !next && setKind(null)} kind={kind ?? "expense"}/>
-        </>
-    );
+    return <TransactionSheet open={open} onOpenChange={onOpenChange} kind="expense"/>;
 }
 
 function ThemeChooser() {

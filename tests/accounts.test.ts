@@ -65,7 +65,7 @@ describe.skipIf(!testDatabaseUrl)("accounts and transfers", () => {
         const discover = await created(CreateAccount({name: "Discover", type: "credit", institution: "Discover", balance: -200, balanceDate}));
 
         await CreateTransaction({amount: 50, category: "Groceries", type: "expense", date: sept(5), accountId: discover.id, description: "Market"});
-        await CreateTransaction({amount: 2000, category: "Salary", type: "income", date: sept(15), accountId: chase.id});
+        await CreateTransaction({amount: 2000, category: "Paycheck", type: "income", date: sept(15), accountId: chase.id});
         await CreateTransfer({amount: 250, date: sept(20), fromAccountId: chase.id, toAccountId: discover.id, description: "Card payment"});
 
         expect(await balanceOf(chase.id)).toBe(1000 + 2000 - 250);
@@ -92,7 +92,7 @@ describe.skipIf(!testDatabaseUrl)("accounts and transfers", () => {
     it("compares a balance check with the transactions before saving it", async () => {
         const chase = await created(CreateAccount({name: "Chase checking", type: "checking", balance: 500, balanceDate}));
         await CreateTransaction({amount: 25, category: "Groceries", type: "expense", date: sept(2), accountId: chase.id});
-        await CreateTransaction({amount: 100, category: "Salary", type: "income", date: sept(3), accountId: chase.id});
+        await CreateTransaction({amount: 100, category: "Paycheck", type: "income", date: sept(3), accountId: chase.id});
         const sept5 = new Date("2026-09-05T23:59:59.999Z");
 
         // Matches: 500 - 25 + 100
@@ -151,7 +151,7 @@ describe.skipIf(!testDatabaseUrl)("accounts and transfers", () => {
         const discover = await created(CreateAccount({name: "Discover", type: "credit", balance: -300, balanceDate}));
 
         // Recorded as an expense by mistake, e.g. from a statement import
-        await CreateTransaction({amount: 300, category: "General", type: "expense", date: sept(10), accountId: chase.id, description: "DISCOVER E-PAYMENT"});
+        await CreateTransaction({amount: 300, category: "Shopping", type: "expense", date: sept(10), accountId: chase.id, description: "DISCOVER E-PAYMENT"});
         const payment = await prisma.transaction.findFirstOrThrow({where: {userId}});
         expect(await monthExpense(8)).toEqual({income: 0, expense: 300});
 

@@ -6,6 +6,38 @@ const note = z.string().trim().max(500).nullish().transform((v) => v || null);
 // filed under a spending category is a refund and lowers that spending
 const categoryType = z.enum(["income", "expense"]).optional();
 
+const categoryRef = z.object({name: z.string().min(1), type: z.enum(["income", "expense"])});
+// Someone already in Pennywise, or a name for someone new
+const personRef = z.union([
+    z.object({id: z.string().min(1)}),
+    z.object({name: z.string().trim().min(1, "Type the person's name").max(80)}),
+]);
+
+// Your share in a category, or someone else's share
+export const LineSchema = z.object({
+    amount,
+    category: categoryRef.nullish(),
+    person: personRef.nullish(),
+});
+
+// Money spent or received, as the Log sheet saves it: a category, a split, or neither
+// to sort later
+export const SaveEntrySchema = z.object({
+    // Set when editing
+    id: z.string().min(1).optional(),
+    type: z.enum(["income", "expense"]),
+    amount,
+    date: z.coerce.date(),
+    description: z.string().trim().max(191).default(""),
+    note,
+    accountId: z.string().nullish().transform((v) => v || null),
+    category: categoryRef.nullable(),
+    person: personRef.nullish(),
+    lines: z.array(LineSchema).max(20).nullish(),
+});
+
+export type SaveEntrySchemaType = z.input<typeof SaveEntrySchema>;
+
 export const CreateTransactionSchema = z.object({
     amount,
     description: z.string().optional(),

@@ -3,6 +3,7 @@ import {ACCOUNT_GROUPS, listAccounts} from "@/lib/accounts";
 import {roundMoney} from "@/lib/ledger";
 import {getCategoryTotals, getDailySpending, getTotals} from "@/lib/reports";
 import {currencyFormatter, toTransactionRow, transactionRowInclude} from "@/lib/transactionRows";
+import {owedTotals, personBalances} from "@/lib/people";
 
 // Everything Home shows, in one request. Balances are always as of now; the month
 // numbers use calendar months in the server's time zone (TZ).
@@ -28,6 +29,12 @@ function cumulative(days: Map<string, number>, year: number, month: number, last
     return points;
 }
 
+// Cash and checking, minus what the cards owe
+export async function getSpendingMoney(userId: string) {
+    const accounts = (await listAccounts(userId)).filter((a) => !a.archived && (a.group === "spending" || a.group === "credit"));
+    return roundMoney(accounts.reduce((total, a) => total + a.balance, 0));
+}
+
 export async function getHome(userId: string, now = new Date()) {
     const accounts = (await listAccounts(userId, now)).filter((a) => !a.archived);
     const sum = (list: typeof accounts) => roundMoney(list.reduce((total, a) => total + a.balance, 0));
@@ -45,7 +52,7 @@ export async function getHome(userId: string, now = new Date()) {
     const daysThisMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
 
     const formatter = await currencyFormatter(userId);
-    const [thisMonth, categories, thisDays, lastDays, recent, toSort] = await Promise.all([
+    const [thisMonth, categories, thisDays, lastDays, recent, toSort, balances] = await Promise.all([
         getTotals(userId, monthStart, todayEnd),
         getCategoryTotals(userId, monthStart, todayEnd),
         getDailySpending(userId, monthStart, todayEnd),
@@ -57,7 +64,9 @@ export async function getHome(userId: string, now = new Date()) {
             take: RECENT_COUNT,
         }),
         prisma.transaction.count({where: {userId, needsReview: true, type: {in: ["income", "expense"]}}}),
+        personBalances(userId),
     ]);
+    const owed = owedTotals(balances);
 
     const lastMonthPace = cumulative(lastDays, lastMonthStart.getUTCFullYear(), lastMonthStart.getUTCMonth(), daysLastMonth);
     const lastMonthSoFar = lastMonthPace[Math.min(today, daysLastMonth) - 1]?.total ?? 0;
@@ -66,7 +75,9 @@ export async function getHome(userId: string, now = new Date()) {
         totals: {
             spendingMoney: sum(spendingAccounts),
             savings: sum(inGroup("savings")),
-            netWorth: sum(accounts),
+            // What friends owe you, minus what you owe them
+            owedToYou: owed.net,
+            netWorth: roundMoney(sum(accounts) + owed.net),
         },
         // The accounts that make up Spending money, to show the math
         spendingParts: spendingAccounts.map((a) => ({id: a.id, name: a.name, type: a.type, balance: a.balance})),

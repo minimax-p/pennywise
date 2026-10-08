@@ -1,15 +1,17 @@
 import prisma from "@/lib/prisma";
 import {payeeKey} from "@/lib/payee";
+import {loadRules, matchRule} from "@/lib/rules";
 import {Alternative, askJev, AUTO_ACCEPT_CONFIDENCE, CategoryOption, jevEnabled, JevContext, PastChoice} from "@/lib/categorize/jev";
 
 // Picks a category for new transactions, most trusted source first:
-// 1. what you chose before for the same merchant
-// 2. the category the bank put in its export
-// 3. keywords like PAYROLL or NETFLIX
-// 4. Jev, when TYPESAFE_API_KEY is set
+// 1. your rules
+// 2. what you chose before for the same merchant
+// 3. the category the bank put in its export
+// 4. keywords like PAYROLL or NETFLIX
+// 5. Jev, when TYPESAFE_API_KEY is set
 // Anything left is Unsorted and waits on the Sort page.
 
-export type CategorySource = "history" | "bank" | "keyword" | "ai" | "none";
+export type CategorySource = "rule" | "history" | "bank" | "keyword" | "ai" | "none";
 
 export type CategorySuggestion = {
     name: string;
@@ -18,6 +20,8 @@ export type CategorySuggestion = {
     confidence: number | null;
     // Jev's most likely categories, offered on the Sort page
     alternatives: Alternative[] | null;
+    // A rule's name for the merchant
+    rename?: string | null;
 };
 
 export type SuggestInput = {
@@ -28,57 +32,91 @@ export type SuggestInput = {
     bankCategory: string | null;
     accountName?: string | null;
     accountType?: string | null;
+    // The person on the line, for rules about people
+    person?: string | null;
+    personId?: string | null;
 };
 
-// Category names below are the universal categories from prisma/seed.mjs
+// Categories below are keys of the built-in categories in prisma/categories.mjs, so they keep
+// working after you rename one
 
 // Categories Chase, Discover and Capital One card exports put in their Category column
 const BANK_CATEGORIES: Record<string, string> = {
     // Chase
-    "FOOD & DRINK": "Restaurants",
-    "GROCERIES": "Groceries",
-    "GAS": "Gas",
-    "SHOPPING": "General",
-    "ENTERTAINMENT": "Events & Concerts",
-    "BILLS & UTILITIES": "Utilities",
-    "HEALTH & WELLNESS": "Healthcare",
-    "PERSONAL": "Beauty & Grooming",
-    "HOME": "Home Furnishings",
-    "AUTOMOTIVE": "Vehicle Maintenance",
+    "FOOD & DRINK": "eating-out",
+    "GROCERIES": "groceries",
+    "GAS": "gas",
+    "SHOPPING": "shopping",
+    "ENTERTAINMENT": "fun",
+    "BILLS & UTILITIES": "utilities",
+    "HEALTH & WELLNESS": "health",
+    "PERSONAL": "personal-care",
+    "HOME": "household",
+    "AUTOMOTIVE": "car",
+    "TRAVEL": "travel",
+    "GIFTS & DONATIONS": "gifts",
+    "EDUCATION": "education",
+    "FEES & ADJUSTMENTS": "fees",
     // Discover
-    "RESTAURANTS": "Restaurants",
-    "SUPERMARKETS": "Groceries",
-    "GASOLINE": "Gas",
-    "MERCHANDISE": "General",
-    "DEPARTMENT STORES": "General",
-    "HOME IMPROVEMENT": "Maintenance",
-    "MEDICAL SERVICES": "Healthcare",
-    "TRAVEL/ ENTERTAINMENT": "Events & Concerts",
+    "RESTAURANTS": "eating-out",
+    "SUPERMARKETS": "groceries",
+    "GASOLINE": "gas",
+    "MERCHANDISE": "shopping",
+    "DEPARTMENT STORES": "shopping",
+    "HOME IMPROVEMENT": "household",
+    "MEDICAL SERVICES": "health",
+    "TRAVEL/ ENTERTAINMENT": "fun",
+    "AUTOMOTIVE ": "car",
+    "SERVICES": "household",
+    "GOVERNMENT SERVICES": "taxes",
     // Capital One
-    "DINING": "Restaurants",
-    "GAS/AUTOMOTIVE": "Gas",
-    "HEALTH CARE": "Healthcare",
-    "MERCHANDISE & SUPPLIES": "General",
-    "PHONE/CABLE": "Internet",
-    "UTILITIES": "Utilities",
+    "DINING": "eating-out",
+    "GAS/AUTOMOTIVE": "gas",
+    "HEALTH CARE": "health",
+    "MERCHANDISE & SUPPLIES": "shopping",
+    "PHONE/CABLE": "phone-internet",
+    "UTILITIES": "utilities",
+    "ENTERTAINMENT ": "fun",
+    "LODGING": "travel",
+    "AIRFARE": "travel",
 };
 
-const KEYWORD_RULES: { pattern: RegExp, income: boolean, name: string }[] = [
-    {pattern: /PAYROLL|DIRECT DEP|DIR DEP|SALARY/i, income: true, name: "Salary"},
-    {pattern: /INTEREST|DIVIDEND/i, income: true, name: "Dividends & Interest"},
-    {pattern: /CASHBACK|CASH BACK|REWARD/i, income: true, name: "Dividends & Interest"},
-    {pattern: /UBER\b|LYFT/i, income: false, name: "Taxi/Uber"},
-    {pattern: /DOORDASH|UBER EATS|GRUBHUB/i, income: false, name: "Food Delivery"},
-    {pattern: /NETFLIX|HULU|DISNEY PLUS|HBO|MAX\.COM|YOUTUBE PREMIUM/i, income: false, name: "Streaming Services"},
-    {pattern: /SPOTIFY|APPLE MUSIC/i, income: false, name: "Music"},
-    {pattern: /AMAZON|AMZN/i, income: false, name: "Amazon"},
+// Well-known chains and words; only names that mean the same thing for everyone
+const KEYWORD_RULES: { pattern: RegExp, income: boolean, key: string }[] = [
+    {
+        pattern: /\b(OVERDRAFT|NSF|INSUFFICIENT FUNDS|SERVICE|MAINTENANCE|MONTHLY|WIRE|ATM|FOREIGN (TRANSACTION|EXCHANGE)|LATE( PAYMENT)?|RETURNED (ITEM|PAYMENT)|ANNUAL( MEMBERSHIP)?|CASH ADVANCE)\s+FEE|\bFEE FOR\b|ATM SURCHARGE|INTEREST CHARGE|PURCHASE INTEREST/i,
+        income: false, key: "fees",
+    },
+    {pattern: /PAYROLL|DIRECT DEP|DIR DEP|SALARY/i, income: true, key: "paycheck"},
+    {pattern: /INTEREST|DIVIDEND/i, income: true, key: "interest"},
+    {pattern: /CASHBACK|CASH BACK|REWARD/i, income: true, key: "interest"},
+    {pattern: /\bIRS\b|TREAS TAX|TAX PYMT|STATE TAX|DMV|USCIS|PASSPORT/i, income: false, key: "taxes"},
+    {pattern: /UBER\s*\*?\s*EATS|DOORDASH|GRUBHUB|SEAMLESS|POSTMATES/i, income: false, key: "eating-out"},
+    {pattern: /UBER\b|LYFT|\bMTA\b|OMNY|NJ TRANSIT|AMTRAK|METRO ?CARD|CLIPPER|VENTRA|SEPTA|WMATA/i, income: false, key: "rides"},
+    {pattern: /STARBUCKS|DUNKIN|TIM HORTONS|DUTCH BROS|PEET'?S|BOBA|BUBBLE TEA|KUNG FU TEA|GONG CHA|\bCHATIME|TEAVANA/i, income: false, key: "coffee-snacks"},
+    {pattern: /MCDONALD|BURGER KING|WENDY'?S|TACO BELL|\bKFC\b|CHIPOTLE|SUBWAY|CHICK-?FIL-?A|POPEYES|PANERA|DOMINO'?S|PIZZA HUT|PAPA JOHN|FIVE GUYS|SHAKE SHACK|PANDA EXPRESS|SWEETGREEN|\bPHO\b|RAMEN|SUSHI|PIZZA|GRILL|DINER|BURRITO|TAQUERIA|RESTAURANT|KITCHEN|CAFE\b/i, income: false, key: "eating-out"},
+    {pattern: /WAL-?MART|WM SUPERCENTER|SAMS ?CLUB|SAM'S CLUB|COSTCO|BJ'?S WHOLESALE|SHOPRITE|STOP ?& ?SHOP|TRADER JOE|WHOLE ?FOODS|WHOLEFDS|ALDI|KROGER|SAFEWAY|PUBLIX|WEGMANS|HANNAFORD|FOOD LION|GIANT EAGLE|H-E-B|HMART|H MART|99 RANCH|SUPERMARKET|GROCERY|MARKET BASKET|INSTACART/i, income: false, key: "groceries"},
+    {pattern: /SHELL\b|EXXON|MOBIL\b|\bBP\b|CHEVRON|SUNOCO|SPEEDWAY|CITGO|VALERO|MARATHON PETRO|GULF OIL|WAWA|QUICKCHEK|MURPHY USA|CIRCLE K/i, income: false, key: "gas"},
+    {pattern: /PROGRESSIVE|GEICO|STATE FARM|ALLSTATE|JIFFY LUBE|VALVOLINE|\bVIOC\b|MIDAS|PEP BOYS|AUTOZONE|ADVANCE AUTO|PARKING|PARKMOBILE|E-?Z ?PASS|TOLL/i, income: false, key: "car"},
+    {pattern: /VERIZON|T-MOBILE|AT&T|\bVISIBLE\b|MINT MOBILE|CRICKET|BOOST MOBILE|SPECTRUM|XFINITY|COMCAST|OPTIMUM|FIOS/i, income: false, key: "phone-internet"},
+    {pattern: /CON ?ED|NATIONAL GRID|PSE&G|PG&E|DUKE ENERGY|ELECTRIC|WATER DEPT|GAS & ELECTRIC/i, income: false, key: "utilities"},
+    {pattern: /NETFLIX|HULU|DISNEY ?PLUS|DISNEYPLUS|HBO|MAX\.COM|YOUTUBE PREMIUM|SPOTIFY|APPLE\.COM\/BILL|APPLE MUSIC|ICLOUD|AMAZON PRIME|PRIME VIDEO|AUDIBLE|PARAMOUNT|PEACOCK|CRUNCHYROLL|OPENAI|CHATGPT|ANTHROPIC|CLAUDE\.AI|GITHUB|DROPBOX|GOOGLE \*?(STORAGE|ONE)|ADOBE|MICROSOFT/i, income: false, key: "subscriptions"},
+    {pattern: /\bAMC\b|REGAL|CINEMA|FANDANGO|TICKETMASTER|STUBHUB|STEAM ?GAMES|PLAYSTATION|NINTENDO|XBOX|BOWLING/i, income: false, key: "fun"},
+    {pattern: /CVS|WALGREENS|RITE AID|PHARMACY|DENTAL|MEDICAL|HOSPITAL|CLINIC|URGENT CARE|PLANET FITNESS|GYM\b/i, income: false, key: "health"},
+    {pattern: /GREAT CLIPS|SUPERCUTS|BARBER|SALON|SEPHORA|ULTA/i, income: false, key: "personal-care"},
+    {pattern: /AIRBNB|EXPEDIA|BOOKING\.COM|HOTEL|MARRIOTT|HILTON|DELTA AIR|UNITED AIR|AMERICAN AIR|JETBLUE|SOUTHWEST|SPIRIT AIR|FRONTIER AIR/i, income: false, key: "travel"},
+    {pattern: /HOME DEPOT|LOWE'?S|IKEA|BED BATH|DOLLAR ?TREE|DOLLAR GENERAL|FAMILY DOLLAR/i, income: false, key: "household"},
+    {pattern: /AMAZON|AMZN|TARGET\b|BEST BUY|TEMU|SHEIN|EBAY|ETSY|MACY'?S|TJ ?MAXX|MARSHALLS|NIKE|UNIQLO|OLD NAVY|APPLE STORE/i, income: false, key: "shopping"},
+    {pattern: /TUITION|UNIVERSITY|COLLEGE|COURSERA|UDEMY/i, income: false, key: "education"},
 ];
 
 // Only categories you picked (or confirmed) teach future suggestions, so an AI guess
 // you never looked at can't spread to other transactions
 export const TRUSTED_CATEGORY = {
     needsReview: false,
-    OR: [{categorizedBy: null}, {categorizedBy: {in: ["you", "history"]}}],
+    OR: [{categorizedBy: null}, {categorizedBy: {in: ["you", "history", "rule"]}}],
+    // A split's parts are in its lines, not in one category to suggest
+    category: {type: {in: ["income", "expense"]}},
 };
 
 export function needsReview(suggestion: CategorySuggestion) {
@@ -99,8 +137,8 @@ export function categorizationFields(suggestion: CategorySuggestion) {
 
 async function loadJevContext(userId: string): Promise<JevContext> {
     const categories = await prisma.category.findMany({
-        where: {OR: [{userId}, {isUniversal: true}], type: {in: ["income", "expense"]}, NOT: {name: "Unsorted"}},
-        orderBy: {name: "asc"},
+        where: {OR: [{userId}, {isUniversal: true}], type: {in: ["income", "expense"]}, hidden: false, NOT: {name: "Unsorted"}},
+        orderBy: [{sortOrder: "asc"}, {name: "asc"}],
     });
     const recent = await prisma.transaction.findMany({
         where: {userId, type: {in: ["income", "expense"]}, payeeKey: {not: null}, ...TRUSTED_CATEGORY},
@@ -110,7 +148,7 @@ async function loadJevContext(userId: string): Promise<JevContext> {
     });
 
     const options = (type: string): CategoryOption[] =>
-        categories.filter((c) => c.type === type).map((c) => ({name: c.name, group: c.tag}));
+        categories.filter((c) => c.type === type).map((c) => ({name: c.name, group: c.group}));
     // Your most recent choice for each merchant
     const pastChoices = (type: string): PastChoice[] => {
         const byMerchant = new Map<string, string>();
@@ -150,17 +188,25 @@ export async function suggestCategories(
         }
     }
 
+    const rules = await loadRules(userId);
+    // Built-in categories you haven't hidden, by key, under their current names
+    const builtIn = await prisma.category.findMany({where: {key: {not: null}, hidden: false}, select: {key: true, name: true}});
+    const nameOfKey = (key: string | undefined) => key ? builtIn.find((c) => c.key === key)?.name : undefined;
+
     const suggestions = inputs.map((input, i): CategorySuggestion => {
         const income = input.amount > 0;
-        const none = {confidence: null, alternatives: null};
+        const type = income ? "income" : "expense";
+        const rule = matchRule(rules, {description: input.description, type, person: input.person, personId: input.personId});
+        const none = {confidence: null, alternatives: null, rename: rule?.rename ?? null};
+        if (rule?.category && rule.category.type === type) return {name: rule.category.name, source: "rule", ...none};
         const fromHistory = keys[i] && learned.get(`${income ? "income" : "expense"}:${keys[i]}`);
         if (fromHistory) return {name: fromHistory, source: "history", ...none};
         if (!income && input.bankCategory) {
-            const fromBank = BANK_CATEGORIES[input.bankCategory.trim().toUpperCase()];
+            const fromBank = nameOfKey(BANK_CATEGORIES[input.bankCategory.trim().toUpperCase()]);
             if (fromBank) return {name: fromBank, source: "bank", ...none};
         }
-        const rule = KEYWORD_RULES.find((r) => r.income === income && r.pattern.test(input.description));
-        if (rule) return {name: rule.name, source: "keyword", ...none};
+        const keyword = nameOfKey(KEYWORD_RULES.find((r) => r.income === income && r.pattern.test(input.description))?.key);
+        if (keyword) return {name: keyword, source: "keyword", ...none};
         return {name: "Unsorted", source: "none", ...none};
     });
 
@@ -186,7 +232,10 @@ export async function suggestCategories(
                 const answer = answers[g];
                 if (!answer) return;
                 for (const i of indexes) {
-                    suggestions[i] = {name: answer.name, source: "ai", confidence: answer.confidence, alternatives: answer.alternatives};
+                    suggestions[i] = {
+                        name: answer.name, source: "ai", confidence: answer.confidence, alternatives: answer.alternatives,
+                        rename: suggestions[i].rename,
+                    };
                 }
             });
         }

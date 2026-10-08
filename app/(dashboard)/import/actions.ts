@@ -1,18 +1,13 @@
 "use server";
 
-import {redirect} from "next/navigation";
+import {ActionResult, requireUser} from "@/lib/actionResult";
 import {Prisma} from "@prisma/client";
-import {currentUser} from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import {
     applyMapping, ColumnMapping, guessMapping, parseFile, presetLabel, StatementBalance, statementBalances, withBalanceColumn
 } from "@/lib/import/parse";
 import {commitImport, CommitResult, planImport, PlanRow} from "@/lib/import/plan";
 import {ColumnMappingSchema, CommitImportSchema, CommitImportSchemaType} from "@/schema/import";
-
-// Expected failures are returned instead of thrown, because Next.js hides
-// error messages thrown from server actions in production.
-type ActionResult<T> = { ok: true, data: T } | { ok: false, error: string };
 
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
 
@@ -31,14 +26,6 @@ export type ImportPreview = {
 
 const serializeBalances = (balances: StatementBalance[]) =>
     balances.map((b) => ({date: b.date.toISOString(), balance: b.balance}));
-
-async function requireUser() {
-    const user = await currentUser();
-    if (!user) {
-        redirect('/login');
-    }
-    return user;
-}
 
 // A mapping saved from an earlier import only applies if the file has the same columns
 function savedMapping(settings: Prisma.JsonValue | null, headers: string[]): ColumnMapping | null {

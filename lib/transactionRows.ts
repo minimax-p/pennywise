@@ -1,6 +1,7 @@
 import {Prisma} from "@prisma/client";
 import prisma from "@/lib/prisma";
 import {GetFormatterForCurrency} from "@/lib/helpers";
+import {merchantName} from "@/lib/merchant";
 
 // The fields every transaction list (Transactions, Home, account pages, Sort) shows
 
@@ -9,6 +10,15 @@ export const transactionRowInclude = {
     plaidItem: {select: {institutionName: true}},
     account: {select: {name: true}},
     toAccount: {select: {name: true}},
+    person: {select: {id: true, name: true}},
+    lines: {
+        orderBy: {position: "asc"},
+        select: {
+            amount: true,
+            category: {select: {name: true, icon: true, type: true}},
+            person: {select: {id: true, name: true}},
+        },
+    },
 } satisfies Prisma.TransactionInclude;
 
 type TransactionWithRelations = Prisma.TransactionGetPayload<{ include: typeof transactionRowInclude }>;
@@ -18,7 +28,10 @@ export function toTransactionRow(transaction: TransactionWithRelations, formatte
         id: transaction.id,
         amount: transaction.amount,
         formattedAmount: formatter.format(transaction.amount),
+        // The bank's text, or what you typed
         description: transaction.description,
+        // What to call it: your rename, a cleaned-up statement line, or what you typed
+        name: merchantName(transaction),
         note: transaction.note,
         date: transaction.date,
         // income, expense, transfer or adjustment
@@ -37,6 +50,10 @@ export function toTransactionRow(transaction: TransactionWithRelations, formatte
             ? transaction.plaidItem?.institutionName ?? 'Bank'
             : null,
         needsReview: transaction.needsReview,
+        // Zelle or Venmo counterparty, or the person you picked
+        person: transaction.person,
+        // A split's parts: your shares by category, other people's shares
+        lines: transaction.lines,
     };
 }
 

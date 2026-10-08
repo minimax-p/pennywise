@@ -45,3 +45,10 @@ export function isSelf(name: string, selfNames: string[][]): boolean {
     const tokens = new Set(nameTokens(name));
     return selfNames.some((self) => self.every((t) => tokens.has(t)));
 }
+
+// Looser, for card lines that cut your name short, like "VENMO*PHAM HUU NHAT MI": most
+// words of one of your names (three, or all of a shorter one) appear somewhere in the text
+export function mentionsSelf(text: string, selfNames: string[][]): boolean {
+    const tokens = new Set(nameTokens(text));
+    return selfNames.some((self) => self.filter((t) => tokens.has(t)).length >= Math.min(self.length, 3));
+}

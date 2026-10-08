@@ -1,32 +1,27 @@
 import prisma from "@/lib/prisma";
 import {roundMoney} from "@/lib/ledger";
+import {classify} from "@/lib/classify";
 
-// Spending and income, computed straight from transactions.
-//
-// What money counts as follows its category: money out in a spending category is
-// spending, and money back in one (a refund, a friend paying you back) lowers it. Money in
-// to an income category is income. Transfers and balance adjustments count as neither.
-
-export function classify(type: string, categoryType: string, amount: number): { spending: number, income: number } {
-    const direction = type === "expense" ? -1 : type === "income" ? 1 : 0;
-    if (categoryType === "expense") return {spending: -direction * amount, income: 0};
-    if (categoryType === "income") return {spending: 0, income: direction * amount};
-    return {spending: 0, income: 0};
-}
+// Spending and income, computed straight from transactions. See lib/classify.ts for what
+// counts as what.
 
 type CategoryInfo = { id: string, name: string, icon: string, type: string };
 
 async function loadRows(userId: string, from: Date, to: Date) {
-    const rows = await prisma.transaction.findMany({
+    const transactions = await prisma.transaction.findMany({
         where: {userId, date: {gte: from, lte: to}, type: {in: ["income", "expense"]}},
-        select: {date: true, type: true, amount: true, categoryId: true},
+        select: {date: true, type: true, amount: true, categoryId: true, lines: {select: {amount: true, categoryId: true}}},
     });
+    // A split stands for its shares in categories
+    const parts = transactions.flatMap((t) => t.lines.length === 0
+        ? [{date: t.date, type: t.type, amount: t.amount, categoryId: t.categoryId}]
+        : t.lines.flatMap((l) => l.categoryId ? [{date: t.date, type: t.type, amount: l.amount, categoryId: l.categoryId}] : []));
     const categories = await prisma.category.findMany({
-        where: {id: {in: [...new Set(rows.map((r) => r.categoryId))]}},
+        where: {id: {in: [...new Set(parts.map((r) => r.categoryId))]}},
         select: {id: true, name: true, icon: true, type: true},
     });
     const byId = new Map<string, CategoryInfo>(categories.map((c) => [c.id, c]));
-    return rows.flatMap((row) => {
+    return parts.flatMap((row) => {
         const category = byId.get(row.categoryId);
         return category ? [{...row, category, ...classify(row.type, category.type, row.amount)}] : [];
     });

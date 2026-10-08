@@ -33,7 +33,7 @@ vi.mock("@/lib/plaid", async (importOriginal) => ({
 import prisma from "@/lib/prisma";
 import {decryptSecret, encryptSecret} from "@/lib/crypto";
 import {CreateTransaction, DeleteTransaction, EditTransaction} from "@/app/(dashboard)/_actions/transactions";
-import {CreateCategory, EditCategory} from "@/app/(dashboard)/_actions/categories";
+import {CreateCategory, MergeCategory, UpdateCategory} from "@/app/(dashboard)/_actions/categories";
 import {CreatePlaidLinkToken, ExchangePlaidPublicToken, UnlinkPlaidItem} from "@/app/(dashboard)/_actions/plaid";
 import {historyTotals} from "./reportHelpers";
 
@@ -70,11 +70,11 @@ describe.skipIf(!testDatabaseUrl)("server actions", () => {
             });
 
             await EditTransaction({
-                id: created.id, type: "expense", amount: 35, category: "Restaurants",
+                id: created.id, type: "expense", amount: 35, category: "Eating out",
                 date: new Date("2026-10-02T00:00:00Z"), description: "Dinner",
             });
             expect(await prisma.transaction.findUniqueOrThrow({where: {id: created.id}, include: {category: true}}))
-                .toMatchObject({amount: 35, description: "Dinner", type: "expense", category: {name: "Restaurants"}});
+                .toMatchObject({amount: 35, description: "Dinner", type: "expense", category: {name: "Eating out"}});
             expect(await history()).toEqual({
                 days: [{month: 9, day: 2, income: 0, expense: 35}],
                 months: [{month: 9, income: 0, expense: 35}],
@@ -87,8 +87,8 @@ describe.skipIf(!testDatabaseUrl)("server actions", () => {
 
         it("only accepts categories of the transaction's type", async () => {
             await expect(CreateTransaction({
-                amount: 20, category: "Salary", type: "expense", date: new Date(),
-            })).rejects.toThrow("Category not found");
+                amount: 20, category: "Paycheck", type: "expense", date: new Date(),
+            })).rejects.toThrow("There is no category called Paycheck");
         });
 
         it("cannot edit or delete another user's transaction", async () => {
@@ -105,15 +105,27 @@ describe.skipIf(!testDatabaseUrl)("server actions", () => {
 
     describe("categories", () => {
         it("rejects names that clash with a universal category of the same type", async () => {
-            await expect(CreateCategory({name: "Groceries", icon: "🥕", type: "expense"})).rejects.toThrow(/already exists/);
-            // Universal "Groceries" is an expense category, so an income one is fine
+            await expect(CreateCategory({name: "groceries", icon: "🥕", type: "expense"})).rejects.toThrow(/already a spending category called Groceries/);
+            // The built-in Groceries is a spending category, so a money-in one is fine
             await expect(CreateCategory({name: "Groceries", icon: "🥕", type: "income"})).resolves.toMatchObject({userId});
-            await CreateCategory({name: "Plants", icon: "🪴", type: "expense"});
-            await expect(EditCategory({oldName: "Plants", newName: "Restaurants", icon: "🪴", type: "expense"}))
-                .rejects.toThrow(/already exists/);
+            const plants = await CreateCategory({name: "Plants", icon: "🪴", type: "expense", group: "Home"});
+            expect(await UpdateCategory({id: plants.id, name: "Eating out", icon: "🪴", group: "Home", hidden: false}))
+                .toEqual({ok: false, error: "There's already a spending category called Eating out"});
             // Renaming a category to itself, or changing only its case, is not a clash
-            await expect(EditCategory({oldName: "Plants", newName: "plants", icon: "🌵", type: "expense"}))
-                .resolves.toMatchObject({name: "plants", icon: "🌵"});
+            expect(await UpdateCategory({id: plants.id, name: "plants", icon: "🌵", group: "Home", hidden: true}))
+                .toEqual({ok: true, data: null});
+            expect(await prisma.category.findUniqueOrThrow({where: {id: plants.id}})).toMatchObject({name: "plants", icon: "🌵", hidden: true});
+            // The system categories stay as they are
+            const transfer = await prisma.category.findUniqueOrThrow({where: {key: "transfer"}});
+            expect(await UpdateCategory({id: transfer.id, name: "Moves", icon: "🔁", hidden: false}))
+                .toEqual({ok: false, error: "This category can't be changed"});
+
+            // Merging moves its transactions
+            await CreateTransaction({amount: 12, category: "plants", type: "expense", date: new Date()});
+            const household = await prisma.category.findUniqueOrThrow({where: {key: "household"}});
+            expect(await MergeCategory({fromId: plants.id, intoId: household.id})).toEqual({ok: true, data: {moved: 1}});
+            expect(await prisma.category.findUnique({where: {id: plants.id}})).toBeNull();
+            expect(await prisma.transaction.count({where: {userId, categoryId: household.id}})).toBe(1);
         });
     });
 

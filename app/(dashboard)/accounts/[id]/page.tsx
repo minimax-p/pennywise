@@ -88,7 +88,7 @@ function AccountView() {
                     {account && <CheckStatus account={account} formatter={formatter}/>}
                     {account?.type === "cd" && <CdDetails account={account} formatter={formatter}/>}
                     <div className="grid grid-cols-2 gap-3">
-                        <Button onClick={() => setChecking(true)}><Scale/>Check balance</Button>
+                        <Button onClick={() => setChecking(true)}><Scale/>{account?.type === "cash" ? "Count cash" : "Check balance"}</Button>
                         <Link href={`/import?account=${id}`} className={buttonVariants({variant: "outline"})}><FileUp/>Import</Link>
                     </div>
                 </Card>

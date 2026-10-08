@@ -1,7 +1,6 @@
 "use server";
 
-import {currentUser} from "@/lib/auth";
-import {redirect} from "next/navigation";
+import {ActionResult, requireUser} from "@/lib/actionResult";
 import {LinkTokenCreateRequest, Products} from "plaid";
 import prisma from "@/lib/prisma";
 import {getPlaidError, plaidClient, plaidCountryCodes} from "@/lib/plaid";
@@ -9,23 +8,11 @@ import {decryptSecret, encryptSecret} from "@/lib/crypto";
 import {PlaidSyncResult, syncPlaidItem} from "@/lib/plaidSync";
 import {UnlinkPlaidItemSchema, UnlinkPlaidItemSchemaType} from "@/schema/plaid";
 
-// Expected failures are returned instead of thrown, because Next.js hides
-// error messages thrown from server actions in production.
-type ActionResult<T> = { ok: true, data: T } | { ok: false, error: string };
-
 function plaidErrorResult(error: unknown): { ok: false, error: string } {
     const plaidError = getPlaidError(error);
     if (!plaidError) throw error;
     console.error("Plaid error:", plaidError.error_code, plaidError.error_message);
     return {ok: false, error: plaidError.display_message || plaidError.error_message};
-}
-
-async function requireUser() {
-    const user = await currentUser();
-    if (!user) {
-        redirect('/login');
-    }
-    return user;
 }
 
 // Pass an itemId to reconnect an existing bank connection (Plaid Link update mode)

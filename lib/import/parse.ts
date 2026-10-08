@@ -17,8 +17,10 @@ export type StatementRow = {
     skipReason: string | null;
     // The account's balance right after this line, when the file has a balance column
     balance?: number | null;
-    // Extra text from the bank, like an OFX memo, kept as the transaction's note
+    // Extra text from the bank, like an OFX memo or a Venmo note, kept as the transaction's note
     memo?: string | null;
+    // The other person, when the file names them (Venmo's From and To columns)
+    person?: string | null;
 };
 
 // A balance the statement shows for the end of a day
@@ -298,6 +300,8 @@ export function applyMapping(headers: string[], records: string[][], mapping: Co
 
         let description = get(mapping.description);
         let skipReason: string | null = null;
+        let memo: string | null = null;
+        let person: string | null = null;
 
         if (mapping.preset === "venmo") {
             const status = get("Status");
@@ -305,8 +309,12 @@ export function applyMapping(headers: string[], records: string[][], mapping: Co
                 skipped++;
                 continue;
             }
+            // The person is the description and the note is kept as the note. Lines are told
+            // apart by Venmo's ID, so re-importing older files still skips them.
             const counterpart = amount < 0 ? get("To") : get("From");
-            description = [counterpart, description].filter(Boolean).join(": ") || get("Type");
+            memo = description || null;
+            person = counterpart || null;
+            description = counterpart || get("Type") || description;
             const funding = get("Funding Source");
             // Paid straight from a bank or card, so the Venmo balance did not change and
             // the payment shows up on that bank's statement instead
@@ -325,6 +333,8 @@ export function applyMapping(headers: string[], records: string[][], mapping: Co
             bankCategory: get(mapping.category) || null,
             skipReason,
             balance,
+            memo: memo?.slice(0, 500) ?? null,
+            person,
         });
     }
 

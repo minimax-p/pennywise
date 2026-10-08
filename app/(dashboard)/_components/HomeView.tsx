@@ -56,12 +56,17 @@ function HomeView({firstName}: { firstName: string | null }) {
                     <SkeletonWrapper isLoading={home.isLoading}>
                         <SpendingMoney data={data} formatter={formatter}/>
                     </SkeletonWrapper>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                         <SkeletonWrapper isLoading={home.isLoading}>
                             <Tile label="Savings & CDs" value={formatter.format(data?.totals.savings ?? 0)} emoji="🐷"/>
                         </SkeletonWrapper>
                         <SkeletonWrapper isLoading={home.isLoading}>
-                            <Tile label="Net worth" value={formatter.format(data?.totals.netWorth ?? 0)} emoji="🌱"/>
+                            <Tile label={(data?.totals.owedToYou ?? 0) < 0 ? "You owe" : "Owed to you"} href="/people"
+                                  value={formatter.format(Math.abs(data?.totals.owedToYou ?? 0))} emoji="🤝"/>
+                        </SkeletonWrapper>
+                        <SkeletonWrapper isLoading={home.isLoading}>
+                            <Tile label="Net worth" value={formatter.format(data?.totals.netWorth ?? 0)} emoji="🌱"
+                                  className="col-span-2 sm:col-span-1"/>
                         </SkeletonWrapper>
                     </div>
                     {data && <Attention data={data} formatter={formatter}/>}
@@ -120,15 +125,16 @@ function SpendingMoney({data, formatter}: { data?: HomeData, formatter: Intl.Num
     );
 }
 
-function Tile({label, value, emoji}: { label: string, value: string, emoji: string }) {
-    return (
-        <Card className="flex flex-col gap-1 p-4">
+function Tile({label, value, emoji, href, className}: { label: string, value: string, emoji: string, href?: string, className?: string }) {
+    const card = (
+        <Card className={cn("flex h-full flex-col gap-1 p-4", href && "transition-colors hover:bg-accent", !href && className)}>
             <span className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
                 <span role="img" aria-hidden>{emoji}</span>{label}
             </span>
             <span className="font-display text-2xl font-semibold money">{value}</span>
         </Card>
     );
+    return href ? <Link href={href} className={className}>{card}</Link> : card;
 }
 
 // Things that need you: transactions to sort, balances that don't add up or haven't been checked

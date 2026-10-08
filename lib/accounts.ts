@@ -2,6 +2,7 @@ import {Prisma} from "@prisma/client";
 import prisma from "@/lib/prisma";
 import {buildLedger, CheckInterval, latestMismatch, Ledger, LedgerCheck, LedgerTransaction} from "@/lib/ledger";
 import {AccountType} from "@/lib/types";
+import {categoryByKey} from "@/lib/categoryKeys";
 
 const ledgerTransactionFields = {
     id: true, date: true, createdAt: true, type: true, amount: true, accountId: true, toAccountId: true,
@@ -78,7 +79,7 @@ export function checkStatus(ledger: Ledger, now = new Date()): CheckStatus {
 
 // How accounts are grouped on Home
 export const ACCOUNT_GROUPS = [
-    {id: "spending", label: "Cash & checking", types: ["checking", "cash"]},
+    {id: "spending", label: "Cash & checking", types: ["checking", "cash", "wallet"]},
     {id: "credit", label: "Credit cards", types: ["credit"]},
     {id: "savings", label: "Savings & CDs", types: ["savings", "cd"]},
 ] as const satisfies readonly { id: string, label: string, types: readonly AccountType[] }[];
@@ -123,20 +124,14 @@ export async function listAccounts(userId: string, now = new Date()) {
 
 export type AccountSummary = Awaited<ReturnType<typeof listAccounts>>[number];
 
-// Universal category that every transfer is filed under
-export async function getTransferCategory(db: Prisma.TransactionClient = prisma) {
-    const existing = await db.category.findFirst({where: {type: "transfer", isUniversal: true}});
-    return existing ?? db.category.create({
-        data: {name: "Transfer", icon: "🔁", type: "transfer", isUniversal: true},
-    });
+// The category every transfer is filed under
+export function getTransferCategory(db: Prisma.TransactionClient = prisma) {
+    return categoryByKey("transfer", db);
 }
 
-// Universal category for balance adjustments, which are neither spending nor income
-export async function getAdjustmentCategory(db: Prisma.TransactionClient = prisma) {
-    const existing = await db.category.findFirst({where: {type: "adjustment", isUniversal: true}});
-    return existing ?? db.category.create({
-        data: {name: "Adjustment", icon: "⚖️", type: "adjustment", isUniversal: true},
-    });
+// The category for balance adjustments, which are neither spending nor income
+export function getAdjustmentCategory(db: Prisma.TransactionClient = prisma) {
+    return categoryByKey("adjustment", db);
 }
 
 // Throws unless every id is an account owned by the user

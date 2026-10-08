@@ -1,8 +1,8 @@
 "use server";
 
-import {redirect} from "next/navigation";
-import {currentUser} from "@/lib/auth";
+import {ActionResult, requireUser} from "@/lib/actionResult";
 import prisma from "@/lib/prisma";
+import {categoryByKey} from "@/lib/categoryKeys";
 import {Account} from "@prisma/client";
 import {
     CheckBalanceSchema,
@@ -18,18 +18,6 @@ import {
 } from "@/schema/account";
 import {getAdjustmentCategory, loadLedger} from "@/lib/accounts";
 import {CENT, roundMoney} from "@/lib/ledger";
-
-// Expected failures are returned instead of thrown, because Next.js hides
-// error messages thrown from server actions in production.
-type ActionResult<T> = { ok: true, data: T } | { ok: false, error: string };
-
-async function requireUser() {
-    const user = await currentUser();
-    if (!user) {
-        redirect('/login');
-    }
-    return user;
-}
 
 async function nameTaken(userId: string, name: string, excludeId?: string) {
     const existing = await prisma.account.findFirst({
@@ -100,7 +88,7 @@ export async function CheckBalance(form: CheckBalanceSchemaType): Promise<Action
         return {ok: false, error: parsedBody.error.issues[0]?.message ?? "Check the amount"};
     }
     const user = await requireUser();
-    const {accountId, balance, balanceDate, save, adjust} = parsedBody.data;
+    const {accountId, balance, balanceDate, save, adjust, spend} = parsedBody.data;
 
     const account = await prisma.account.findFirst({where: {id: accountId, userId: user.id}});
     if (!account) return {ok: false, error: "Account not found"};
@@ -127,8 +115,25 @@ export async function CheckBalance(form: CheckBalanceSchemaType): Promise<Action
     };
     if (!save) return {ok: true, data: result};
 
-    const adjustmentCategory = adjust && Math.abs(difference) >= CENT ? await getAdjustmentCategory() : null;
+    const spent = spend && difference <= -CENT;
+    if (spend && !spent) return {ok: false, error: "Only less cash than expected can be counted as spending"};
+    const adjustmentCategory = adjust && !spent && Math.abs(difference) >= CENT ? await getAdjustmentCategory() : null;
     await prisma.$transaction(async (tx) => {
+        if (spent) {
+            const untracked = await categoryByKey("untracked-cash", tx);
+            await tx.transaction.create({
+                data: {
+                    userId: user.id,
+                    amount: Math.abs(difference),
+                    date: balanceDate,
+                    description: "Cash spent, not logged",
+                    type: "expense",
+                    categoryId: untracked.id,
+                    accountId,
+                    categorizedBy: "you",
+                },
+            });
+        }
         if (adjustmentCategory) {
             await tx.transaction.create({
                 data: {

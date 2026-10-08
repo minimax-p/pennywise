@@ -75,7 +75,7 @@ describe.skipIf(!testDatabaseUrl)("POST /api/capture", () => {
         expect(response.status).toBe(201);
         const body = await response.json();
         expect(body).toMatchObject({account: "Discover", category: "Unsorted"});
-        expect(body.message).toBe("Logged $4.50 at Blue Bottle Coffee → ❓ Unsorted (Discover). Sort it in Pennywise.");
+        expect(body.message).toBe("Logged $4.50 at Blue Bottle Coffee (Discover). Sort it in Pennywise.");
         expect(body.needsReview).toBe(true);
 
         expect(await prisma.transaction.findUniqueOrThrow({where: {id: body.id}})).toMatchObject({
@@ -94,21 +94,21 @@ describe.skipIf(!testDatabaseUrl)("POST /api/capture", () => {
     });
 
     it("uses the category picked last time for the merchant", async () => {
-        const coffee = await prisma.category.findFirstOrThrow({where: {name: "Coffee Shops", type: "expense", isUniversal: true}});
+        const coffee = await prisma.category.findFirstOrThrow({where: {name: "Coffee & snacks", type: "expense", isUniversal: true}});
         // As if sorted on the Sort page
         await prisma.transaction.updateMany({where: {userId}, data: {categoryId: coffee.id, needsReview: false, categorizedBy: "you"}});
 
         const response = await capture({amount: "5.25", merchant: "Blue Bottle Coffee", card: "Unknown Card", date: "2026-10-07T09:00:00"});
-        expect(await response.json()).toMatchObject({category: "Coffee Shops", account: null});
+        expect(await response.json()).toMatchObject({category: "Coffee & snacks", account: null});
     });
 
     it("lets Jev sort purchases from new merchants as they come in", async () => {
-        const jev = await startFakeJev(byMerchant({"SHELL": ["Gas", 0.97], "CORNER": ["General", 0.4]}));
+        const jev = await startFakeJev(byMerchant({"SHELL": ["Gas", 0.97], "CORNER": ["Shopping", 0.4]}));
         try {
             const sure = await (await capture({amount: "45.10", merchant: "Shell", card: "Discover it", date: "2026-10-08T12:00:00"})).json();
             expect(sure).toMatchObject({category: "Gas", needsReview: false});
             const unsure = await (await capture({amount: "3.00", merchant: "Corner Store", card: "Discover it", date: "2026-10-08T13:00:00"})).json();
-            expect(unsure).toMatchObject({category: "General", needsReview: true});
+            expect(unsure).toMatchObject({category: "Shopping", needsReview: true});
             expect(unsure.message).toMatch(/Sort it in Pennywise/);
         } finally {
             await jev.stop();

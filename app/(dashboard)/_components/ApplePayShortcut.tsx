@@ -51,9 +51,11 @@ function ApplePayShortcut() {
     return (
         <div className="flex flex-col gap-4 text-sm">
             <p className="text-muted-foreground">
-                An automation in the Shortcuts app sends each Apple Pay purchase to Pennywise as you pay. It only sees
-                Apple Pay taps, so keep importing statements to catch online purchases and correct tips.
-                Set each account&apos;s Apple Wallet card name above so purchases land in the right account.
+                Two shortcuts for your iPhone, using the same key. <b>Apple Pay</b> logs each Apple Pay purchase as you pay
+                (set each account&apos;s Apple Wallet card name above so it lands in the right account).{" "}
+                <b>Log a purchase</b> asks how much, where, how you paid and the category, for the card swipe or cash
+                Apple Pay doesn&apos;t see. Run it with the Action button, Back Tap, Control Center or Siri.
+                Keep importing statements: they catch everything else and fix tips.
             </p>
             {tokens.map((token) => (
                 <div key={token.id} className="flex items-center justify-between gap-2 rounded-md border p-3">
@@ -70,19 +72,22 @@ function ApplePayShortcut() {
                     </Button>
                 </div>
             ))}
-            <div>
-                <CreateKeyDialog/>
+            <div className="flex flex-wrap gap-2">
+                <CreateKeyDialog variant="apple-pay"/>
+                <CreateKeyDialog variant="log"/>
             </div>
         </div>
     );
 }
 
-function CreateKeyDialog() {
+function CreateKeyDialog({variant}: { variant: "apple-pay" | "log" }) {
     const [open, setOpen] = useState(false);
     const [name, setName] = useState("iPhone");
     const [token, setToken] = useState<string | null>(null);
     const queryClient = useQueryClient();
-    const endpoint = typeof window === 'undefined' ? '/api/capture' : `${window.location.origin}/api/capture`;
+    const origin = typeof window === 'undefined' ? '' : window.location.origin;
+    const endpoint = `${origin}/api/capture`;
+    const title = variant === "log" ? "Log a purchase shortcut" : "Apple Pay shortcut";
 
     const create = useMutation({
         mutationFn: () => CreateCaptureToken(name),
@@ -101,11 +106,13 @@ function CreateKeyDialog() {
             if (!next) setToken(null);
         }}>
             <DialogTrigger asChild>
-                <Button className="gap-2"><Plus className="h-4 w-4"/>Set up the shortcut</Button>
+                <Button className="gap-2" variant={variant === "log" ? "outline" : "default"}>
+                    <Plus className="h-4 w-4"/>{variant === "log" ? "Set up Log a purchase" : "Set up Apple Pay"}
+                </Button>
             </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[520px]">
                 <DialogHeader>
-                    <DialogTitle>Apple Pay shortcut</DialogTitle>
+                    <DialogTitle>{title}</DialogTitle>
                     <DialogDescription>
                         {token ? "Copy the key now. It is not shown again." : "Create a key for your iPhone, then add the automation."}
                     </DialogDescription>
@@ -125,6 +132,8 @@ function CreateKeyDialog() {
                             </Button>
                         </DialogFooter>
                     </form>
+                ) : variant === "log" ? (
+                    <LogShortcutSteps origin={origin} token={token}/>
                 ) : (
                     <div className="flex flex-col gap-4 text-sm">
                         <CopyField label="URL" value={endpoint}/>
@@ -147,6 +156,53 @@ function CreateKeyDialog() {
                 )}
             </DialogContent>
         </Dialog>
+    );
+}
+
+// Builds "Log a purchase": four questions, answered from lists Pennywise keeps in order of use
+function LogShortcutSteps({origin, token}: { origin: string, token: string }) {
+    return (
+        <div className="flex flex-col gap-4 text-sm">
+            <CopyField label="Lists URL" value={`${origin}/api/capture/options`}/>
+            <CopyField label="Log URL" value={`${origin}/api/capture`}/>
+            <CopyField label="Authorization header" value={`Bearer ${token}`}/>
+            <ol className="list-decimal space-y-2 pl-5">
+                <li>Open <b>Shortcuts</b>, tap <b>+</b> and name the shortcut <b>Log a purchase</b>.</li>
+                <li>
+                    Add <b>Get Contents of URL</b> with the Lists URL. Under <b>Show More</b>, add a header named
+                    <b> Authorization</b> with the value above.
+                </li>
+                <li>Add <b>Ask for Input</b>: Input Type <b>Number</b>, prompt <b>How much?</b></li>
+                <li>
+                    Add <b>Get Dictionary Value</b>: Value for <code>places</code> in Contents of URL. Then <b>Choose from List</b>,
+                    prompt <b>Where?</b>
+                </li>
+                <li>
+                    Add <b>If</b> Chosen Item <b>is</b> <code>New place…</code>. Inside it, <b>Ask for Input</b> (Text, prompt
+                    <b> Where?</b>). Under <b>Otherwise</b>, add <b>Text</b> containing Chosen Item.
+                </li>
+                <li>
+                    Add <b>Get Dictionary Value</b> for <code>accounts</code> in Contents of URL, then <b>Choose from List</b>,
+                    prompt <b>Paid with?</b>
+                </li>
+                <li>
+                    Add <b>Get Dictionary Value</b> for <code>categories</code> in Contents of URL, then <b>Choose from List</b>,
+                    prompt <b>Category?</b>
+                </li>
+                <li>
+                    Add another <b>Get Contents of URL</b> with the Log URL: <b>Method POST</b>, the same Authorization
+                    header, <b>Request Body JSON</b> with four text fields: <code>amount</code> = Provided Input,
+                    {" "}<code>merchant</code> = If Result, <code>account</code> = the Paid with choice, <code>category</code> = the
+                    Category choice.
+                </li>
+                <li>Add <b>Get Dictionary Value</b> for <code>message</code>, then <b>Show Notification</b> with it.</li>
+            </ol>
+            <p className="text-muted-foreground">
+                To run it in one press: Settings → Action Button → Shortcut (iPhone 15 Pro and newer), Settings → Accessibility →
+                Touch → Back Tap → Double Tap, or add it to Control Center. &ldquo;Hey Siri, log a purchase&rdquo; works too.
+                Pick <b>Sort later</b> when you&apos;re in a hurry; it waits on the Sort page.
+            </p>
+        </div>
     );
 }
 

@@ -1,5 +1,6 @@
 "use server";
 
+import {ActionResult} from "@/lib/actionResult";
 import {redirect} from "next/navigation";
 import {currentUser} from "@/lib/auth";
 import prisma from "@/lib/prisma";
@@ -7,8 +8,6 @@ import {UpdateSelfNamesSchema} from "@/schema/userSettings";
 import {getTransferCategory} from "@/lib/accounts";
 import {selfTransferAccount} from "@/lib/import/plan";
 import {parseSelfNames} from "@/lib/import/zelle";
-
-type ActionResult<T> = { ok: true, data: T } | { ok: false, error: string };
 
 // Zelle payments to or from these names are imported as moves between your own accounts
 export async function UpdateSelfNames(selfNames: string): Promise<ActionResult<string | null>> {
