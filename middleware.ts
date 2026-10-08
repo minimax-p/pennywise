@@ -19,7 +19,11 @@ export async function middleware(request: NextRequest) {
         return NextResponse.json({error: "Unauthorized"}, {status: 401});
     }
 
-    const loginUrl = new URL("/login", request.url);
+    // Built from the Host header, so the browser stays on the domain it asked for. Behind nginx with
+    // HOSTNAME=127.0.0.1, request.url carries the app's own address (https://localhost:3200) instead.
+    const host = request.headers.get("host") ?? request.nextUrl.host;
+    const protocol = request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "");
+    const loginUrl = new URL("/login", `${protocol}://${host}`);
     if (pathname !== "/") loginUrl.searchParams.set("next", pathname + search);
     return NextResponse.redirect(loginUrl);
 }
